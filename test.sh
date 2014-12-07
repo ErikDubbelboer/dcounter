@@ -2,7 +2,7 @@
 
 rm -f test.sqlite
 
-./dcounter -db=test.sqlite -client="127.0.0.1:9371" &
+./dcounter -id=1 -db=test.sqlite -client="127.0.0.1:9371" &
 P=$!
 
 sleep 1

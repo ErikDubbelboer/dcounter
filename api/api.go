@@ -50,32 +50,34 @@ func (api *API) Ping() error {
 	return err
 }
 
-func (api *API) Get(id string) (float64, error) {
+func (api *API) Get(id string) (float64, bool, error) {
 	var err error
 
 	for i := 0; i < 2; i++ {
 		if api.c == nil {
 			if err := api.connect(); err != nil {
-				return 0, err
+				return 0, true, err
 			}
 		}
 
 		if err = api.p.Write("GET", []string{id}); err != nil {
 			continue
 		} else if cmd, args, err := api.p.Read(); err != nil {
-			return 0, err
+			return 0, true, err
 		} else if cmd != "RET" {
-			return 0, fmt.Errorf("RET expected")
-		} else if len(args) != 1 {
-			return 0, fmt.Errorf("1 argument expected")
+			return 0, true, fmt.Errorf("RET expected")
+		} else if len(args) != 2 {
+			return 0, true, fmt.Errorf("2 arguments expected")
 		} else if amount, err := strconv.ParseFloat(args[0], 64); err != nil {
-			return 0, err
+			return 0, true, err
+		} else if inconsistent, err := strconv.ParseBool(args[1]); err != nil {
+			return 0, true, err
 		} else {
-			return amount, nil
+			return amount, inconsistent, nil
 		}
 	}
 
-	return 0, err
+	return 0, true, err
 }
 
 func (api *API) Inc(id string, amount float64) error {
@@ -102,7 +104,7 @@ func (api *API) Inc(id string, amount float64) error {
 	return err
 }
 
-func (api *API) Replicate(op string, host string) error {
+func (api *API) Reset(id string) error {
 	var err error
 
 	for i := 0; i < 2; i++ {
@@ -112,7 +114,7 @@ func (api *API) Replicate(op string, host string) error {
 			}
 		}
 
-		if err = api.p.Write("REPLICATE", []string{op, host}); err != nil {
+		if err = api.p.Write("RESET", []string{id}); err != nil {
 			continue
 		} else if cmd, _, err := api.p.Read(); err != nil {
 			return err
@@ -126,7 +128,7 @@ func (api *API) Replicate(op string, host string) error {
 	return err
 }
 
-func (api *API) Sync() error {
+func (api *API) Join(hosts []string) error {
 	var err error
 
 	for i := 0; i < 2; i++ {
@@ -136,7 +138,7 @@ func (api *API) Sync() error {
 			}
 		}
 
-		if err = api.p.Write("SYNC", []string{}); err != nil {
+		if err = api.p.Write("JOIN", hosts); err != nil {
 			continue
 		} else if cmd, _, err := api.p.Read(); err != nil {
 			return err
