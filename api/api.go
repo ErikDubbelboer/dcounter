@@ -5,7 +5,7 @@ import (
 	"net"
 	"strconv"
 
-	"github.com/spotmx/dcounter/proto"
+	"github.com/atomx/dcounter/proto"
 )
 
 type API struct {

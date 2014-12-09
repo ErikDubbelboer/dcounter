@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"io"
 )
 
 type Buffer []byte
@@ -11,7 +11,7 @@ func (b *Buffer) Write(p []byte) (int, error) {
 	lp := len(p)
 
 	if lb+lp > cap(*b) {
-		return 0, fmt.Errorf("buffer is full")
+		return 0, io.EOF
 	}
 
 	*b = append(*b, p...)

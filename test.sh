@@ -1,16 +1,18 @@
 #!/bin/sh
 
+export GOMAXPROCS=4
+
 rm -f test.sqlite
 
-./dcounter -id=1 -db=test.sqlite -client="127.0.0.1:9371" &
+./dcounter server -db=test.sqlite -client="127.0.0.1:9371" &
 P=$!
 
 sleep 1
 
-./cli/cli -connect="127.0.0.1:9371" get test
-./cli/cli -connect="127.0.0.1:9371" inc test 1
-./cli/cli -connect="127.0.0.1:9371" inc test 1
-./cli/cli -connect="127.0.0.1:9371" get test
+./dcounter cli -connect="127.0.0.1:9371" get test
+./dcounter cli -connect="127.0.0.1:9371" inc test 1
+./dcounter cli -connect="127.0.0.1:9371" inc test 1
+./dcounter cli -connect="127.0.0.1:9371" get test
 
 kill -2 $P
 wait $P

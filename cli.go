@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/spotmx/dcounter/api"
+	"github.com/atomx/dcounter/api"
 )
 
 func cli(arguments []string) {
@@ -20,12 +20,12 @@ func cli(arguments []string) {
 	defer api.Close()
 
 	if flags.Arg(0) == "get" {
-		amount, inconsistent, err := api.Get(flags.Arg(1))
+		amount, consistent, err := api.Get(flags.Arg(1))
 		if err != nil {
 			fmt.Println(err)
 		} else {
-			state := "CONSITENT"
-			if !inconsistent {
+			state := "CONSISTENT"
+			if !consistent {
 				state = "INCONSISTENT"
 			}
 

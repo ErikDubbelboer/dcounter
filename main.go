@@ -7,11 +7,12 @@ import (
 )
 
 func usageExit() {
-	fmt.Fprintf(os.Stderr, "Usage: %s [cli|server]\n")
+	fmt.Fprintf(os.Stderr, "Usage: %s [cli|server]\n", os.Args[0])
 	os.Exit(2)
 }
 
 func main() {
+	flag.Parse()
 	args := flag.Args()
 	if len(args) < 1 {
 		usageExit()

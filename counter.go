@@ -1,7 +1,7 @@
 package main
 
 type Counter struct {
-	Name     string
-	Value    float64
-	Revision uint
+	Up       float64
+	Down     float64
+	Revision uint32
 }
