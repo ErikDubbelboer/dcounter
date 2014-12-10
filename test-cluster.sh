@@ -12,18 +12,18 @@ P2=$!
 
 sleep 1
 
-set -x
-
 ./dcounter cli -connect="127.0.0.1:10001" join "127.0.0.1:9002"
 ./dcounter cli -connect="127.0.0.1:10001" inc test 1
 sleep 1
+echo 1.0
 ./dcounter cli -connect="127.0.0.1:10002" get test
-
-set +x
 
 kill -2 $P1
 wait $P1
+
+echo 1.0
 ./dcounter cli -connect="127.0.0.1:10002" get test
+
 kill -2 $P2
 wait $P2
 

@@ -9,11 +9,22 @@ P=$!
 
 sleep 1
 
-echo 0
+echo 0.0
 ./dcounter cli -connect="127.0.0.1:9371" get test
+
 ./dcounter cli -connect="127.0.0.1:9371" inc test 1
+
+echo 1.0
+./dcounter cli -connect="127.0.0.1:9371" get test
+
+./dcounter cli -connect="127.0.0.1:9371" reset test
+
+echo 0.0
+./dcounter cli -connect="127.0.0.1:9371" get test
+
 ./dcounter cli -connect="127.0.0.1:9371" inc test 1
-echo 2
+
+echo 1.0
 ./dcounter cli -connect="127.0.0.1:9371" get test
 
 kill -2 $P

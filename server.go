@@ -88,32 +88,25 @@ func (s *Server) NodeMeta(limit int) []byte {
 	return s.m.Encode(limit)
 }
 
-func (s *Server) NotifyMsg(msg []byte) {
-	reader := bufio.NewReader(bytes.NewReader(msg))
+func (s *Server) readCounters(reader *bufio.Reader) error {
+	var l uint32
+	if err := binary.Read(reader, binary.LittleEndian, &l); err != nil {
+		return err
+	}
+
+	if l == 0 {
+		return nil
+	}
 
 	var id ID
 	if err := binary.Read(reader, binary.LittleEndian, &id); err != nil {
-		log.Printf("[ERR] %v\n", err)
-		return
+		return err
 	}
 
-	s.l.Lock()
-	defer s.l.Unlock()
-
-	// If we don't know this id we can ignore it.
-	if _, ok := s.members[id]; !ok {
-		return
-	}
-
-	for {
+	for i := uint32(0); i < l; i++ {
 		var name string
 		if n, err := reader.ReadString('\n'); err != nil {
-			if err == io.EOF {
-				break
-			} else {
-				log.Printf("[ERR] %v\n", err)
-				return
-			}
+			return err
 		} else {
 			// Strip off the '\n'.
 			name = n[:len(n)-1]
@@ -121,90 +114,121 @@ func (s *Server) NotifyMsg(msg []byte) {
 
 		var c Counter
 		if err := binary.Read(reader, binary.LittleEndian, &c); err != nil {
-			if err == io.EOF {
-				break
-			} else {
-				log.Printf("[ERR] %v\n", err)
-				return
-			}
+			return err
+		}
+
+		// If we don't know this id we can ignore it.
+		if _, ok := s.members[id]; !ok {
+			return nil
+		}
+
+		// Never merge our own counters.
+		// This will happen with a TCP state exchange of all counters.
+		if id == s.m.Id {
+			continue
 		}
 
 		if _, ok := s.replicas[id]; !ok {
 			s.replicas[id] = make(map[string]*Counter, 0)
-		}
-
-		if o, ok := s.counters[name]; !ok {
-			s.counters[name] = &Counter{}
-
-			// TODO: Does using a new counter here keep c on the heap
-			// and thereby keeping the number of allocations a lot lower?
 			s.replicas[id][name] = &c
-		} else if o.Revision < c.Revision {
-			o.Up = 0
-			o.Down = 0
-			o.Revision = c.Revision
-
-			for _, counters := range s.replicas {
-				delete(counters, name)
-			}
-
-			// TODO: Does using a new counter here keep c on the heap
-			// and thereby keeping the number of allocations a lot lower?
-			s.replicas[id][name] = &c
-		} else if o, ok = s.replicas[id][name]; ok {
-			if c.Up > o.Up {
-				o.Up = c.Up
-			}
-			if c.Down > o.Down {
-				o.Down = c.Down
-			}
 		} else {
-			// TODO: Does using a new counter here keep c on the heap
-			// and thereby keeping the number of allocations a lot lower?
-			s.replicas[id][name] = &c
+			if o, ok := s.counters[name]; ok && o.Revision < c.Revision {
+				o.Up = 0
+				o.Down = 0
+				o.Revision = c.Revision
+
+				for id, counters := range s.replicas {
+					if id == s.m.Id {
+						continue
+					}
+
+					delete(counters, name)
+				}
+			}
+
+			if o, ok := s.replicas[id][name]; ok && o.Revision < c.Revision {
+				o.Up = c.Up
+				o.Down = c.Down
+				o.Revision = c.Revision
+			} else if ok {
+				if c.Up > o.Up {
+					o.Up = c.Up
+				}
+				if c.Down > o.Down {
+					o.Down = c.Down
+				}
+			} else {
+				s.replicas[id][name] = &c
+			}
 		}
 	}
+
+	return nil
+}
+
+func (s *Server) NotifyMsg(msg []byte) {
+	reader := bufio.NewReader(bytes.NewReader(msg))
+
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	if err := s.readCounters(reader); err != nil && err != io.EOF {
+		log.Printf("[ERR] %v\n", err)
+	}
+}
+
+func (s *Server) writeCounters(writer *bufio.Writer, id ID) error {
+	l := uint32(len(s.replicas[id]))
+
+	if err := binary.Write(writer, binary.LittleEndian, l); err != nil {
+		log.Printf("[ERR] %v\n", err)
+		return nil
+	}
+
+	if err := writer.Flush(); err != nil {
+		return err
+	}
+
+	if l == 0 {
+		return nil
+	}
+
+	if err := binary.Write(writer, binary.LittleEndian, id); err != nil {
+		log.Printf("[ERR] %v\n", err)
+		return nil
+	}
+
+	for name, c := range s.replicas[id] {
+		if _, err := writer.WriteString(name + "\n"); err != nil {
+			return err
+		}
+
+		if err := binary.Write(writer, binary.LittleEndian, c); err != nil {
+			return err
+		}
+
+		if err := writer.Flush(); err != nil {
+			//if err == io.EOF {
+			//	break
+			//} else {
+			return err
+			//}
+		}
+	}
+
+	return nil
 }
 
 func (s *Server) GetBroadcasts(overhead, limit int) [][]byte {
 	buffer := make(Buffer, 0, limit-overhead)
 	writer := bufio.NewWriter(&buffer)
 
-	if err := binary.Write(writer, binary.LittleEndian, s.m.Id); err != nil {
-		log.Printf("[ERR] %v\n", err)
-		return nil
-	}
-
 	s.l.RLock()
 	defer s.l.RUnlock()
 
-	for name, c := range s.counters {
-		if _, err := writer.WriteString(name + "\n"); err != nil {
-			//if err == io.EOF {
-			//	break
-			//} else {
-			log.Printf("[ERR] %v\n", err)
-			return nil
-			//}
-		}
-
-		if err := binary.Write(writer, binary.LittleEndian, c); err != nil {
-			//if err == io.EOF {
-			//	break
-			//} else {
-			log.Printf("[ERR] %v\n", err)
-			return nil
-			//}
-		}
-	}
-
-	if err := writer.Flush(); err != nil {
-		//if err == io.EOF {
-		//	break
-		//} else {
+	if err := s.writeCounters(writer, s.m.Id); err != nil {
 		log.Printf("[ERR] %v\n", err)
 		return nil
-		//}
 	}
 
 	return [][]byte{buffer}
@@ -216,6 +240,11 @@ func (s *Server) LocalState(join bool) []byte {
 
 	s.l.RLock()
 	defer s.l.RUnlock()
+
+	if err := binary.Write(writer, binary.LittleEndian, uint32(len(s.members))); err != nil {
+		log.Printf("[ERR] %v\n", err)
+		return nil
+	}
 
 	for id, s := range s.members {
 		if err := binary.Write(writer, binary.LittleEndian, id); err != nil {
@@ -229,14 +258,37 @@ func (s *Server) LocalState(join bool) []byte {
 		}
 	}
 
+	if err := writer.Flush(); err != nil {
+		log.Printf("[ERR] %v\n", err)
+		return nil
+	}
+
+	for id := range s.replicas {
+		if err := s.writeCounters(writer, id); err != nil {
+			log.Printf("[ERR] %v\n", err)
+			return nil
+		}
+	}
+
 	return buffer.Bytes()
 }
 
 func (s *Server) MergeRemoteState(buf []byte, join bool) {
 	reader := bufio.NewReader(bytes.NewReader(buf))
 
-	var members map[ID]*State
-	for {
+	var l uint32
+	if err := binary.Read(reader, binary.LittleEndian, &l); err != nil {
+		if err == io.EOF {
+			return
+		} else {
+			log.Printf("[ERR] %v\n", err)
+			return
+		}
+	}
+
+	members := make(map[ID]*State, l)
+
+	for i := uint32(0); i < l; i++ {
 		var id ID
 		if err := binary.Read(reader, binary.LittleEndian, &id); err != nil {
 			if err == io.EOF {
@@ -249,12 +301,7 @@ func (s *Server) MergeRemoteState(buf []byte, join bool) {
 
 		var s State
 		if err := binary.Read(reader, binary.LittleEndian, &s); err != nil {
-			if err == io.EOF {
-				break
-			} else {
-				log.Printf("[ERR] %v\n", err)
-				return
-			}
+			log.Printf("[ERR] %v\n", err)
 		}
 
 		members[id] = &s
@@ -270,6 +317,16 @@ func (s *Server) MergeRemoteState(buf []byte, join bool) {
 	}
 
 	go s.updateConsitent()
+
+	for {
+		if err := s.readCounters(reader); err != nil {
+			if err != io.EOF {
+				log.Printf("[ERR] %v\n", err)
+			}
+
+			break
+		}
+	}
 }
 
 func (s *Server) NotifyJoin(node *memberlist.Node) {
@@ -280,11 +337,12 @@ func (s *Server) NotifyJoin(node *memberlist.Node) {
 	}
 
 	s.l.Lock()
+	defer s.l.Unlock()
+
 	s.members[m.Id] = &State{
 		Active: 1 - m.Leaving,
 		When:   time.Now().UTC().Unix(),
 	}
-	s.l.Unlock()
 
 	log.Printf("[INFO] %s joined\n", m.Id)
 }
@@ -296,24 +354,25 @@ func (s *Server) NotifyLeave(node *memberlist.Node) {
 		return
 	}
 
-	s.l.Lock()
-	defer s.l.Unlock()
-
 	if m.Leaving == 0 {
-		log.Printf("[WARNING] %d is not reachable\n", m.Id)
+		log.Printf("[WARNING] %s is not reachable\n", m.Id)
 	} else {
+		s.l.Lock()
+		defer s.l.Unlock()
+
 		s.members[m.Id] = &State{
 			Active: 0,
 			When:   time.Now().UTC().Unix(),
 		}
 
-		log.Printf("[INFO] %d left\n", m.Id)
+		log.Printf("[INFO] %s left\n", m.Id)
 	}
 
 	go s.updateConsitent()
 }
 
 func (s *Server) NotifyUpdate(node *memberlist.Node) {
+	go s.updateConsitent()
 }
 
 func (s *Server) get(name string) (float64, bool) {
@@ -321,10 +380,6 @@ func (s *Server) get(name string) (float64, bool) {
 
 	s.l.RLock()
 	defer s.l.RUnlock()
-
-	if v, ok := s.counters[name]; ok {
-		value += v.Up - v.Down
-	}
 
 	for _, counters := range s.replicas {
 		if v, ok := counters[name]; ok {
@@ -356,13 +411,19 @@ func (s *Server) reset(name string) {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	if c, ok := s.counters[name]; ok {
-		c.Up = 0
-		c.Down = 0
-		c.Revision += 1
-	} else {
-		s.counters[name] = &Counter{
-			Revision: 1,
+	for id, counters := range s.replicas {
+		if id == s.m.Id {
+			if c, ok := s.counters[name]; ok {
+				c.Up = 0
+				c.Down = 0
+				c.Revision += 1
+			} else {
+				s.counters[name] = &Counter{
+					Revision: 1,
+				}
+			}
+		} else {
+			delete(counters, name)
 		}
 	}
 }
@@ -444,8 +505,9 @@ func (s *Server) handle(conn net.Conn) {
 			{
 				s.consistent = false
 
-				s.counters = make(map[string]*Counter, 0)
 				s.replicas = make(map[ID]map[string]*Counter, 0)
+				s.replicas[s.m.Id] = make(map[string]*Counter, 0)
+				s.counters = s.replicas[s.m.Id]
 				s.members = make(map[ID]*State, 0)
 			}
 			s.l.Unlock()
@@ -532,12 +594,14 @@ func server(arguments []string) {
 		m:          Meta{},
 		stop:       make(chan struct{}, 0),
 		consistent: true,
-		counters:   make(map[string]*Counter, 0),
 		replicas:   make(map[ID]map[string]*Counter, 0),
 		members:    make(map[ID]*State, 0),
 	}
 
 	s.m.Id.Randomize()
+
+	s.replicas[s.m.Id] = make(map[string]*Counter, 0)
+	s.counters = s.replicas[s.m.Id]
 
 	config := memberlist.DefaultWANConfig()
 	config.Delegate = &s
