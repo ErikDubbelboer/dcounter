@@ -22,6 +22,8 @@ func main() {
 		cli(args[1:])
 	} else if args[0] == "server" {
 		server(args[1:])
+	} else if args[0] == "bench" {
+		bench(args[1:])
 	} else {
 		usageExit()
 	}

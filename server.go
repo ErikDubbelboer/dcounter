@@ -403,7 +403,7 @@ func (s *Server) inc(name string, diff float64) {
 	if diff > 0 {
 		c.Up += diff
 	} else {
-		c.Down += diff
+		c.Down -= diff // diff is negative so -= adds it.
 	}
 }
 

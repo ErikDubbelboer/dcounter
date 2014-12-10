@@ -15,9 +15,20 @@ echo 0
 ./dcounter cli -connect="127.0.0.1:9371" inc test 1
 echo 2
 ./dcounter cli -connect="127.0.0.1:9371" get test
+./dcounter cli -connect="127.0.0.1:9371" reset test
+echo 0
+./dcounter cli -connect="127.0.0.1:9371" get test
+./dcounter cli -connect="127.0.0.1:9371" inc test -1
+./dcounter cli -connect="127.0.0.1:9371" inc test -1
+echo -2
+./dcounter cli -connect="127.0.0.1:9371" get test
+./dcounter cli -connect="127.0.0.1:9371" inc test 1
+time ./dcounter cli -connect="127.0.0.1:9371" inc test 1
+echo 0
+./dcounter cli -connect="127.0.0.1:9371" get test
+
 
 kill -2 $P
 wait $P
 
 rm -f test.sqlite
-
