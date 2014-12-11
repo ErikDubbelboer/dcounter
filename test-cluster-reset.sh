@@ -2,14 +2,12 @@
 
 export GOMAXPROCS=4
 
-rm -f test1.sqlite test2.sqlite test3.sqlite
-
 echo start 1
-./dcounter server -db=test1.sqlite -bind="127.0.0.1:9001" -client="127.0.0.1:10001" &
+./dcounter server -bind="127.0.0.1:9001" -client="127.0.0.1:10001" &
 P1=$!
 sleep 1
 echo start 2
-./dcounter server -db=test2.sqlite -bind="127.0.0.1:9002" -client="127.0.0.1:10002" &
+./dcounter server -bind="127.0.0.1:9002" -client="127.0.0.1:10002" &
 P2=$!
 sleep 1
 
@@ -47,7 +45,7 @@ echo expect 2.0 from 2
 ./dcounter cli -connect="127.0.0.1:10002" get test
 
 echo start 3
-./dcounter server -db=test3.sqlite -bind="127.0.0.1:9003" -client="127.0.0.1:10003" &
+./dcounter server -bind="127.0.0.1:9003" -client="127.0.0.1:10003" &
 P3=$!
 sleep 1
 
@@ -68,5 +66,3 @@ echo expect 2.0 from 3
 echo stop 3
 kill -2 $P3
 wait $P3
-
-rm -f test1.sqlite test2.sqlite test3.sqlite

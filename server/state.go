@@ -1,4 +1,4 @@
-package main
+package server
 
 type State struct {
 	Active byte

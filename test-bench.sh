@@ -2,9 +2,7 @@
 
 export GOMAXPROCS=4
 
-rm -f test.sqlite
-
-./dcounter server -db=test.sqlite -client="127.0.0.1:10001" &
+./dcounter server -client="127.0.0.1:10001" &
 P=$!
 
 sleep 1
@@ -16,8 +14,6 @@ stop() {
   kill -2 $P
 
   wait $P
-
-  rm -f test.sqlite
 
   exit 0
 }

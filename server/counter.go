@@ -1,4 +1,4 @@
-package main
+package server
 
 type Counter struct {
 	Up       float64

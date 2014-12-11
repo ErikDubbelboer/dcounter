@@ -2,14 +2,12 @@
 
 export GOMAXPROCS=4
 
-rm -f test1.sqlite test2.sqlite
-
 echo start 1
-./dcounter server -db=test1.sqlite -bind="127.0.0.1:9001" -client="127.0.0.1:10001" &
+./dcounter server -bind="127.0.0.1:9001" -client="127.0.0.1:10001" &
 P1=$!
 sleep 1
 echo start 2
-./dcounter server -db=test2.sqlite -bind="127.0.0.1:9002" -client="127.0.0.1:10002" &
+./dcounter server -bind="127.0.0.1:9002" -client="127.0.0.1:10002" &
 P2=$!
 sleep 1
 
@@ -32,8 +30,6 @@ stop() {
 
   wait $P1
   wait $P2
-
-  rm -f test1.sqlite test2.sqlite
 
   exit 0
 }
