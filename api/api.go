@@ -56,24 +56,24 @@ func (api *API) Get(id string) (float64, bool, error) {
 	for i := 0; i < 2; i++ {
 		if api.c == nil {
 			if err := api.connect(); err != nil {
-				return 0, true, err
+				return 0, false, err
 			}
 		}
 
 		if err = api.p.Write("GET", []string{id}); err != nil {
 			continue
 		} else if cmd, args, err := api.p.Read(); err != nil {
-			return 0, true, err
+			return 0, false, err
 		} else if cmd != "RET" {
-			return 0, true, fmt.Errorf("RET expected")
+			return 0, false, fmt.Errorf("RET expected")
 		} else if len(args) != 2 {
-			return 0, true, fmt.Errorf("2 arguments expected")
+			return 0, false, fmt.Errorf("2 arguments expected")
 		} else if amount, err := strconv.ParseFloat(args[0], 64); err != nil {
-			return 0, true, err
-		} else if inconsistent, err := strconv.ParseBool(args[1]); err != nil {
-			return 0, true, err
+			return 0, false, err
+		} else if consistent, err := strconv.ParseBool(args[1]); err != nil {
+			return 0, false, err
 		} else {
-			return amount, inconsistent, nil
+			return amount, consistent, nil
 		}
 	}
 
@@ -126,6 +126,40 @@ func (api *API) Reset(id string) error {
 	}
 
 	return err
+}
+
+func (api *API) List() (map[string]float64, error) {
+	var err error
+
+	for i := 0; i < 2; i++ {
+		if api.c == nil {
+			if err := api.connect(); err != nil {
+				return nil, err
+			}
+		}
+
+		if err = api.p.Write("LIST", []string{}); err != nil {
+			continue
+		} else if cmd, args, err := api.p.Read(); err != nil {
+			return nil, err
+		} else if cmd != "RET" {
+			return nil, fmt.Errorf("RET expected")
+		} else {
+			list := make(map[string]float64, len(args)/2)
+
+			for i := 0; i < len(args); i += 2 {
+				if value, err := strconv.ParseFloat(args[i+1], 64); err != nil {
+					return nil, err
+				} else {
+					list[args[i]] = value
+				}
+			}
+
+			return list, nil
+		}
+	}
+
+	return nil, err
 }
 
 func (api *API) Join(hosts []string) error {

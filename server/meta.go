@@ -5,9 +5,7 @@ import (
 	"encoding/binary"
 )
 
-// TODO: implement GobEncoder and GobDecoder to reduce size?
 type Meta struct {
-	Id      ID
 	Leaving byte
 }
 

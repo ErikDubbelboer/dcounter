@@ -34,7 +34,9 @@ func (p Proto) Read() (cmd string, args []string, err error) {
 }
 
 func (p Proto) Write(cmd string, args []string) error {
-	if _, err := p.w.WriteString(cmd + " " + strings.Join(args, " ") + "\n"); err != nil {
+	cmdargs := append([]string{cmd}, args...)
+
+	if _, err := p.w.WriteString(strings.Join(cmdargs, " ") + "\n"); err != nil {
 		return err
 	} else if err := p.w.Flush(); err != nil {
 		return err

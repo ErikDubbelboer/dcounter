@@ -34,11 +34,13 @@ type Server struct {
 
 	consistent bool
 
-	counters map[string]*Counter
-	replicas map[ID]map[string]*Counter
+	counters  map[string]*Counter
+	replicas  map[string]map[string]*Counter
+	revisions map[string]uint32
 
-	// True means member, false means left.
-	members map[ID]*State
+	members map[string]*State
+
+	reconnects map[string]struct{}
 
 	logger *log.Logger
 }
@@ -47,33 +49,22 @@ type Server struct {
 // have a node in our memberlist.
 func (s *Server) updateConsistent() {
 	nodes := s.memberlist.Members()
-	members := make(map[ID]struct{}, len(nodes))
+	members := make(map[string]struct{}, len(nodes))
 
 	for _, node := range nodes {
-		m := &Meta{}
-		if err := m.Decode(node.Meta); err != nil {
-			s.logger.Printf("[ERR] %v", err)
-
-			// With an error we always assume we're inconsistent.
-			s.consistent = false
-			return
-		}
-
-		members[m.Id] = struct{}{}
+		members[node.Name] = struct{}{}
 	}
 
 	s.l.RLock()
 	defer s.l.RUnlock()
 
-	for id, x := range s.members {
-		if x.Active == 0 {
-			continue
-		}
-
-		if _, ok := members[id]; !ok {
-			s.logger.Printf("[WARNING] inconsistent because %s is missing", id)
-			s.consistent = false
-			return
+	for name, state := range s.members {
+		if state.Active == 1 {
+			if _, ok := members[name]; !ok {
+				s.logger.Printf("[WARNING] inconsistent because %s is missing", name)
+				s.consistent = false
+				return
+			}
 		}
 	}
 
@@ -81,39 +72,13 @@ func (s *Server) updateConsistent() {
 }
 
 func (s *Server) logDebug() {
-	nodes := s.memberlist.Members()
-	members := make(map[ID]*memberlist.Node, len(nodes))
-
-	s.logger.Print("memberlist:")
-
-	for _, node := range nodes {
-		m := &Meta{}
-		if err := m.Decode(node.Meta); err != nil {
-			s.logger.Printf("[ERR] %v", err)
-
-			// With an error we always assume we're inconsistent.
-			s.consistent = false
-			return
-		}
-
-		s.logger.Printf("%s %s", node.Name, m.Id)
-
-		members[m.Id] = node
-	}
-
 	s.l.RLock()
 	defer s.l.RUnlock()
 
 	s.logger.Print("members:")
 
-	for id, x := range s.members {
-		name := "-"
-
-		if node, ok := members[id]; ok {
-			name = node.Name
-		}
-
-		s.logger.Printf("%s %v %s", id, x.Active, name)
+	for name, status := range s.members {
+		s.logger.Printf("%s %v", name, status)
 	}
 }
 
@@ -131,9 +96,12 @@ func (s *Server) readCounters(reader *bufio.Reader) error {
 		return nil
 	}
 
-	var id ID
-	if err := binary.Read(reader, binary.LittleEndian, &id); err != nil {
+	var memberName string
+	if s, err := reader.ReadString('\n'); err != nil {
 		return err
+	} else {
+		// Strip off the '\n'.
+		memberName = s[:len(s)-1]
 	}
 
 	for i := uint32(0); i < l; i++ {
@@ -145,53 +113,43 @@ func (s *Server) readCounters(reader *bufio.Reader) error {
 			name = n[:len(n)-1]
 		}
 
+		var r uint32
+		if err := binary.Read(reader, binary.LittleEndian, &r); err != nil {
+			return err
+		}
+
 		var c Counter
 		if err := binary.Read(reader, binary.LittleEndian, &c); err != nil {
 			return err
 		}
 
 		// If we don't know this id we can ignore it.
-		if _, ok := s.members[id]; !ok {
-			return nil
-		}
-
-		// Never merge our own counters.
-		// This will happen with a TCP state exchange of all counters.
-		if id == s.m.Id {
+		if _, ok := s.members[memberName]; !ok {
 			continue
 		}
 
-		if _, ok := s.replicas[id]; !ok {
-			s.replicas[id] = make(map[string]*Counter, 0)
-			s.replicas[id][name] = &c
-		} else {
-			if o, ok := s.counters[name]; ok && o.Revision < c.Revision {
-				o.Up = 0
-				o.Down = 0
-				o.Revision = c.Revision
+		if _, ok := s.replicas[memberName]; !ok {
+			s.replicas[memberName] = make(map[string]*Counter, 0)
+		}
 
-				for id, counters := range s.replicas {
-					if id == s.m.Id {
-						continue
-					}
+		if or := s.revisions[name]; r > or {
+			s.revisions[name] = r
 
-					delete(counters, name)
-				}
+			for _, counters := range s.replicas {
+				delete(counters, name)
 			}
 
-			if o, ok := s.replicas[id][name]; ok && o.Revision < c.Revision {
-				o.Up = c.Up
-				o.Down = c.Down
-				o.Revision = c.Revision
-			} else if ok {
-				if c.Up > o.Up {
-					o.Up = c.Up
-				}
-				if c.Down > o.Down {
-					o.Down = c.Down
-				}
+			s.replicas[memberName][name] = &c
+		} else if or == r {
+			if oc, ok := s.replicas[memberName][name]; !ok {
+				s.replicas[memberName][name] = &c
 			} else {
-				s.replicas[id][name] = &c
+				if c.Up > oc.Up {
+					oc.Up = c.Up
+				}
+				if c.Down > oc.Down {
+					oc.Down = c.Down
+				}
 			}
 		}
 	}
@@ -210,8 +168,8 @@ func (s *Server) NotifyMsg(msg []byte) {
 	}
 }
 
-func (s *Server) writeCounters(writer *bufio.Writer, id ID) error {
-	l := uint32(len(s.replicas[id]))
+func (s *Server) writeCounters(writer *bufio.Writer, memberName string) error {
+	l := uint32(len(s.replicas[memberName]))
 
 	if err := binary.Write(writer, binary.LittleEndian, l); err != nil {
 		s.logger.Printf("[ERR] %v", err)
@@ -226,13 +184,16 @@ func (s *Server) writeCounters(writer *bufio.Writer, id ID) error {
 		return nil
 	}
 
-	if err := binary.Write(writer, binary.LittleEndian, id); err != nil {
-		s.logger.Printf("[ERR] %v", err)
-		return nil
+	if _, err := writer.WriteString(memberName + "\n"); err != nil {
+		return err
 	}
 
-	for name, c := range s.replicas[id] {
+	for name, c := range s.replicas[memberName] {
 		if _, err := writer.WriteString(name + "\n"); err != nil {
+			return err
+		}
+
+		if err := binary.Write(writer, binary.LittleEndian, s.revisions[name]); err != nil {
 			return err
 		}
 
@@ -259,7 +220,7 @@ func (s *Server) GetBroadcasts(overhead, limit int) [][]byte {
 	s.l.RLock()
 	defer s.l.RUnlock()
 
-	if err := s.writeCounters(writer, s.m.Id); err != nil {
+	if err := s.writeCounters(writer, s.Config.Name); err != nil {
 		s.logger.Printf("[ERR] %v", err)
 		return nil
 	}
@@ -279,8 +240,8 @@ func (s *Server) LocalState(join bool) []byte {
 		return nil
 	}
 
-	for id, st := range s.members {
-		if err := binary.Write(writer, binary.LittleEndian, id); err != nil {
+	for memberName, st := range s.members {
+		if _, err := writer.WriteString(memberName + "\n"); err != nil {
 			s.logger.Printf("[ERR] %v", err)
 			return nil
 		}
@@ -289,11 +250,6 @@ func (s *Server) LocalState(join bool) []byte {
 			s.logger.Printf("[ERR] %v", err)
 			return nil
 		}
-	}
-
-	if err := writer.Flush(); err != nil {
-		s.logger.Printf("[ERR] %v", err)
-		return nil
 	}
 
 	for id := range s.replicas {
@@ -319,34 +275,37 @@ func (s *Server) MergeRemoteState(buf []byte, join bool) {
 		}
 	}
 
-	members := make(map[ID]*State, l)
+	s.l.Lock()
+	defer s.l.Unlock()
 
 	for i := uint32(0); i < l; i++ {
-		var id ID
-		if err := binary.Read(reader, binary.LittleEndian, &id); err != nil {
+		var memberName string
+		if name, err := reader.ReadString('\n'); err != nil {
 			if err == io.EOF {
 				break
 			} else {
 				s.logger.Printf("[ERR] %v", err)
 				return
 			}
+		} else {
+			// Strip off the '\n'.
+			memberName = name[:len(name)-1]
 		}
 
-		var st State
-		if err := binary.Read(reader, binary.LittleEndian, &st); err != nil {
+		var state State
+		if err := binary.Read(reader, binary.LittleEndian, &state); err != nil {
 			s.logger.Printf("[ERR] %v", err)
+			return
 		}
 
-		members[id] = &st
+		if x, ok := s.members[memberName]; !ok || state.When > x.When {
+			s.members[memberName] = &state
+		}
 	}
 
-	s.l.Lock()
-	defer s.l.Unlock()
-
-	for id, state := range members {
-		if x, ok := s.members[id]; !ok || state.When > x.When {
-			s.members[id] = state
-		}
+	s.members[s.Config.Name] = &State{
+		Active: 1,
+		When:   time.Now().UTC().Unix(),
 	}
 
 	go s.updateConsistent()
@@ -363,19 +322,16 @@ func (s *Server) MergeRemoteState(buf []byte, join bool) {
 }
 
 func (s *Server) NotifyJoin(node *memberlist.Node) {
-	m := &Meta{}
-	if err := m.Decode(node.Meta); err != nil {
-		s.logger.Printf("[ERR] %v", err)
-		return
-	}
-
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	s.members[m.Id] = &State{
-		Active: 1 - m.Leaving,
+	s.members[node.Name] = &State{
+		Active: 1,
 		When:   time.Now().UTC().Unix(),
 	}
+
+	addr := node.Addr.String() + ":" + strconv.FormatUint(uint64(node.Port), 10)
+	delete(s.reconnects, addr)
 
 	s.logger.Printf("[INFO] %s joined", node.Name)
 }
@@ -387,16 +343,22 @@ func (s *Server) NotifyLeave(node *memberlist.Node) {
 		return
 	}
 
-	if m.Leaving == 0 {
-		s.logger.Printf("[WARNING] %s is not reachable", node.Name)
-	} else {
-		s.l.Lock()
-		defer s.l.Unlock()
+	addr := node.Addr.String() + ":" + strconv.FormatUint(uint64(node.Port), 10)
 
-		s.members[m.Id] = &State{
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	if m.Leaving == 0 {
+		s.reconnects[addr] = struct{}{}
+
+		s.logger.Printf("[WARNING] %s missing", node.Name)
+	} else {
+		s.members[node.Name] = &State{
 			Active: 0,
 			When:   time.Now().UTC().Unix(),
 		}
+
+		delete(s.reconnects, addr)
 
 		s.logger.Printf("[INFO] %s left", node.Name)
 	}
@@ -414,11 +376,9 @@ func (s *Server) get(name string) (float64, bool) {
 	s.l.RLock()
 	defer s.l.RUnlock()
 
-	for id, counters := range s.replicas {
-		s.logger.Printf("%s", id)
-		if v, ok := counters[name]; ok {
-			s.logger.Printf("%#v", v)
-			value += v.Up - v.Down
+	for _, counters := range s.replicas {
+		if c, ok := counters[name]; ok {
+			value += c.Up - c.Down
 		}
 	}
 
@@ -427,7 +387,6 @@ func (s *Server) get(name string) (float64, bool) {
 
 func (s *Server) inc(name string, diff float64) {
 	s.l.Lock()
-	defer s.l.Unlock()
 
 	c, ok := s.counters[name]
 	if !ok {
@@ -440,27 +399,37 @@ func (s *Server) inc(name string, diff float64) {
 	} else {
 		c.Down -= diff // diff is negative so -= adds it.
 	}
+
+	s.l.Unlock()
 }
 
 func (s *Server) reset(name string) {
 	s.l.Lock()
-	defer s.l.Unlock()
 
-	for id, counters := range s.replicas {
-		if id == s.m.Id {
-			if c, ok := s.counters[name]; ok {
-				c.Up = 0
-				c.Down = 0
-				c.Revision += 1
-			} else {
-				s.counters[name] = &Counter{
-					Revision: 1,
-				}
-			}
-		} else {
-			delete(counters, name)
+	s.revisions[name] += 1
+
+	for _, counters := range s.replicas {
+		if c, ok := counters[name]; ok {
+			c.Up = 0
+			c.Down = 0
 		}
 	}
+
+	s.l.Unlock()
+}
+
+func (s *Server) list() map[string]float64 {
+	l := make(map[string]float64, 0)
+
+	s.l.RLock()
+	for _, counters := range s.replicas {
+		for name, c := range counters {
+			l[name] += c.Up - c.Down
+		}
+	}
+	s.l.RUnlock()
+
+	return l
 }
 
 func (s *Server) handle(conn net.Conn) {
@@ -535,24 +504,20 @@ func (s *Server) handle(conn net.Conn) {
 					panic(err)
 				}
 			}
-		case "JOIN":
-			s.l.Lock()
-			{
-				s.consistent = false
+		case "LIST":
+			counters := s.list()
+			args := make([]string, 0, len(counters)*2)
 
-				s.replicas = make(map[ID]map[string]*Counter, 0)
-				s.replicas[s.m.Id] = make(map[string]*Counter, 0)
-				s.counters = s.replicas[s.m.Id]
-				s.members = map[ID]*State{
-					s.m.Id: &State{
-						Active: 1,
-						When:   time.Now().UTC().Unix(),
-					},
-				}
+			for name, value := range counters {
+				args = append(args, name)
+				args = append(args, strconv.FormatFloat(value, 'f', -1, 64))
 			}
-			s.l.Unlock()
 
-			if _, err := s.memberlist.Join(args); err != nil {
+			if err := p.Write("RET", args); err != nil {
+				panic(err)
+			}
+		case "JOIN":
+			if err := s.Join(args); err != nil {
 				if err := p.Error(err); err != nil {
 					panic(err)
 				}
@@ -604,7 +569,48 @@ func (s *Server) listen(socket net.Listener) {
 	}
 }
 
+func (s *Server) reconnect() {
+	defer s.stopped.Done()
+
+	for {
+		select {
+		case <-s.stop:
+			return
+		default:
+		}
+
+		hosts := make([]string, 0)
+
+		s.l.Lock()
+		for host := range s.reconnects {
+			hosts = append(hosts, host)
+		}
+		s.l.Unlock()
+
+		if len(hosts) == 0 {
+			time.Sleep(time.Second)
+			continue
+		}
+
+		s.logger.Printf("reconnecting with %v", hosts)
+
+		s.memberlist.Join(hosts)
+
+		// If we miss 1 host  we try every 12 seconds.
+		// If we miss 4 hosts we try every 4.5 seconds.
+		time.Sleep(2*time.Second + (time.Second*10)/time.Duration(len(hosts)))
+	}
+}
+
 func (s *Server) Start() error {
+	s.replicas[s.Config.Name] = make(map[string]*Counter, 0)
+	s.counters = s.replicas[s.Config.Name]
+
+	s.members[s.Config.Name] = &State{
+		Active: 1,
+		When:   time.Now().UTC().Unix(),
+	}
+
 	if s.Config.LogOutput == nil {
 		s.Config.LogOutput = os.Stderr
 	}
@@ -617,7 +623,7 @@ func (s *Server) Start() error {
 		return err
 	}
 
-	s.stopped.Add(1)
+	s.stopped.Add(2)
 
 	socket, err := net.Listen("tcp", s.client)
 	if err != nil {
@@ -625,12 +631,13 @@ func (s *Server) Start() error {
 	}
 
 	go s.listen(socket)
+	go s.reconnect()
 
 	return nil
 }
 
 func (s *Server) Stop() error {
-	s.stop <- struct{}{}
+	close(s.stop)
 
 	s.m.Leaving = 1
 
@@ -652,7 +659,7 @@ func (s *Server) Stop() error {
 }
 
 func (s *Server) Kill() error {
-	s.stop <- struct{}{}
+	close(s.stop)
 
 	if err := s.memberlist.Shutdown(); err != nil {
 		return err
@@ -661,38 +668,54 @@ func (s *Server) Kill() error {
 	return nil
 }
 
+func (s *Server) Join(hosts []string) error {
+	s.l.Lock()
+
+	s.consistent = false
+
+	s.replicas = make(map[string]map[string]*Counter, 0)
+	s.replicas[s.Config.Name] = make(map[string]*Counter, 0)
+	s.counters = s.replicas[s.Config.Name]
+	s.revisions = make(map[string]uint32, 0)
+	s.members = map[string]*State{
+		s.Config.Name: &State{
+			Active: 1, // Start in an inconsistent state until the first push/pull.
+			When:   time.Now().UTC().Unix(),
+		},
+	}
+	s.reconnects = make(map[string]struct{}, 0)
+
+	s.l.Unlock()
+
+	_, err := s.memberlist.Join(hosts)
+	return err
+}
+
 func New(bind, client string) *Server {
 	s := Server{
 		client:     client,
 		m:          Meta{},
 		stop:       make(chan struct{}, 0),
 		consistent: true,
-		replicas:   make(map[ID]map[string]*Counter, 0),
-		members:    make(map[ID]*State, 0),
+		replicas:   make(map[string]map[string]*Counter, 0),
+		revisions:  make(map[string]uint32, 0),
+		members:    make(map[string]*State, 0),
+		reconnects: make(map[string]struct{}, 0),
 	}
-
-	s.m.Id.Randomize()
-
-	s.members[s.m.Id] = &State{
-		Active: 1,
-		When:   time.Now().UTC().Unix(),
-	}
-
-	s.replicas[s.m.Id] = make(map[string]*Counter, 0)
-	s.counters = s.replicas[s.m.Id]
 
 	s.Config = memberlist.DefaultWANConfig()
 	s.Config.Delegate = &s
 	s.Config.Events = &s
-	s.Config.Name = bind
+	s.Config.Name = RandomName()
 	s.Config.BindAddr, s.Config.BindPort = splitHostPort(bind)
 	s.Config.AdvertiseAddr = s.Config.BindAddr
 	s.Config.AdvertisePort = s.Config.BindPort
 
 	s.Config.SuspicionMult = 2
+	s.Config.PushPullInterval = 60 * time.Second
 	s.Config.ProbeInterval = 2 * time.Second
-	s.Config.ProbeTimeout = 5 * time.Second
-	s.Config.GossipNodes = 6
+	s.Config.ProbeTimeout = 4 * time.Second
+	s.Config.GossipNodes = 4
 	s.Config.GossipInterval = 500 * time.Millisecond
 
 	return &s

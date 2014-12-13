@@ -38,9 +38,16 @@ func cli(arguments []string) {
 			fmt.Println(err)
 		}
 	} else if flags.Arg(0) == "reset" {
-		err := api.Reset(flags.Arg(1))
-		if err != nil {
+		if err := api.Reset(flags.Arg(1)); err != nil {
 			fmt.Println(err)
+		}
+	} else if flags.Arg(0) == "list" {
+		if list, err := api.List(); err != nil {
+			fmt.Println(err)
+		} else {
+			for name, value := range list {
+				fmt.Printf("%s: %f\n", name, value)
+			}
 		}
 	} else if flags.Arg(0) == "join" {
 		if err := api.Join(flags.Args()[1:]); err != nil {
