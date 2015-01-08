@@ -83,10 +83,6 @@ func (s *TestServer) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
-func (s *TestServer) Debug() {
-	s.s.logDebug()
-}
-
 func (s *TestServer) Get(name string, value float64, consistent bool) {
 	s.t.Logf("%s: get %s %f", s.s.Config.Name, name, value)
 

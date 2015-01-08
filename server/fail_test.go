@@ -8,6 +8,7 @@ import (
 )
 
 func TestNetwork(t *testing.T) {
+	// For this test to work you need to change the reconnect retry timeout in server.go:reconnect
 	t.SkipNow()
 
 	tcpa := testproxy.NewTCP(t, "127.0.0.1:3001", "127.0.0.1:2001")
@@ -20,8 +21,6 @@ func TestNetwork(t *testing.T) {
 
 	a.JoinOn("127.0.0.1:3002")
 	time.Sleep(time.Second)
-	a.Debug()
-	b.Debug()
 
 	a.Inc("test", 1)
 	b.Inc("test", 2)
@@ -35,18 +34,14 @@ func TestNetwork(t *testing.T) {
 	udpa.Timeout(d)
 	tcpb.Timeout(d)
 	udpb.Timeout(d)
-	time.Sleep(d)
+	time.Sleep(d + time.Second)
 	t.Log("done, waiting for reconnect")
 	time.Sleep(time.Second * 5)
 	t.Log("should be reconnected now")
-	a.Debug()
-	b.Debug()
 
 	a.Inc("test", 1)
 	b.Inc("test", 2)
-	time.Sleep(time.Second * 1)
+	time.Sleep(time.Second * 2)
 	a.Get("test", 6, true)
 	b.Get("test", 6, true)
-
-	t.Fail()
 }

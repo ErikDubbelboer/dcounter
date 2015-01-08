@@ -1,0 +1,18 @@
+{
+	"ImportPath": "github.com/atomx/dcounter",
+	"GoVersion": "go1.4",
+	"Deps": [
+		{
+			"ImportPath": "github.com/armon/go-metrics",
+			"Rev": "02a28a76dd20081bdd2a92133d467164450a926b"
+		},
+		{
+			"ImportPath": "github.com/hashicorp/go-msgpack/codec",
+			"Rev": "71c2886f5a673a35f909803f38ece5810165097b"
+		},
+		{
+			"ImportPath": "github.com/hashicorp/memberlist",
+			"Rev": "9a1e242e454d2443df330bdd51a436d5a9058fc4"
+		}
+	]
+}

@@ -47,6 +47,10 @@ type Server struct {
 	logger *log.Logger
 }
 
+var (
+	emptyCounter = &Counter{}
+)
+
 // We are consitent if all the members in members that are active
 // have a node in our memberlist.
 func (s *Server) updateConsistent() {
@@ -71,17 +75,6 @@ func (s *Server) updateConsistent() {
 	}
 
 	s.consistent = true
-}
-
-func (s *Server) logDebug() {
-	s.l.RLock()
-	defer s.l.RUnlock()
-
-	s.logger.Print("members:")
-
-	for name, status := range s.members {
-		s.logger.Printf("%s %v", name, status)
-	}
 }
 
 func (s *Server) NodeMeta(limit int) []byte {
@@ -325,7 +318,12 @@ func (s *Server) GetBroadcasts(overhead, limit int) [][]byte {
 			break
 		}
 
-		if err := binary.Write(writer, binary.LittleEndian, s.counters[name]); err != nil {
+		c, ok := s.counters[name]
+		if !ok {
+			c = emptyCounter
+		}
+
+		if err := binary.Write(writer, binary.LittleEndian, c); err != nil {
 			s.logger.Printf("[ERR] %v", err)
 			break
 		}
@@ -605,6 +603,10 @@ func (s *Server) handle(conn net.Conn) {
 				if err := p.Error(err); err != nil {
 					panic(err)
 				}
+			} else if args[0] == "" {
+				if err := p.Error(fmt.Errorf(`Invalid counter name ""`)); err != nil {
+					panic(err)
+				}
 			} else {
 				s.inc(args[0], amount)
 
@@ -719,6 +721,8 @@ func (s *Server) reconnect() {
 		// If we miss 1 host  we try every 12 seconds.
 		// If we miss 4 hosts we try every 4.5 seconds.
 		time.Sleep(2*time.Second + (time.Second*10)/time.Duration(len(hosts)))
+		// This timeout is needed for fail_test.go:TestNetwork
+		//time.Sleep(time.Second)
 	}
 }
 
