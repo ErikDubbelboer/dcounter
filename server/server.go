@@ -38,6 +38,8 @@ type Server struct {
 	replicas  map[string]map[string]*Counter
 	revisions map[string]uint32
 
+	changes *Changes
+
 	members map[string]*State
 
 	reconnects map[string]struct{}
@@ -158,14 +160,86 @@ func (s *Server) readCounters(reader *bufio.Reader) error {
 }
 
 func (s *Server) NotifyMsg(msg []byte) {
-	reader := bufio.NewReader(bytes.NewReader(msg))
+	go func() {
+		reader := bufio.NewReader(bytes.NewReader(msg))
 
-	s.l.Lock()
-	defer s.l.Unlock()
+		s.l.Lock()
+		defer s.l.Unlock()
 
-	if err := s.readCounters(reader); err != nil && err != io.EOF {
-		s.logger.Printf("[ERR] %v", err)
-	}
+		var memberName string
+		if n, err := reader.ReadString('\n'); err != nil {
+			if err != io.EOF {
+				s.logger.Printf("[ERR] %v", err)
+			}
+
+			return
+		} else {
+			// Strip off the '\n'.
+			memberName = n[:len(n)-1]
+		}
+
+		for {
+			var name string
+			if n, err := reader.ReadString('\n'); err != nil {
+				if err != io.EOF {
+					s.logger.Printf("[ERR] %v", err)
+				}
+
+				break
+			} else {
+				// Strip off the '\n'.
+				name = n[:len(n)-1]
+			}
+
+			var r uint32
+			if err := binary.Read(reader, binary.LittleEndian, &r); err != nil {
+				if err != io.EOF {
+					s.logger.Printf("[ERR] %v", err)
+				}
+
+				break
+			}
+
+			var c Counter
+			if err := binary.Read(reader, binary.LittleEndian, &c); err != nil {
+				if err != io.EOF {
+					s.logger.Printf("[ERR] %v", err)
+				}
+
+				break
+			}
+
+			// If we don't know this id we can ignore it.
+			if _, ok := s.members[memberName]; !ok {
+				continue
+			}
+
+			if _, ok := s.replicas[memberName]; !ok {
+				s.replicas[memberName] = make(map[string]*Counter, 0)
+			}
+
+			if or := s.revisions[name]; r > or {
+				s.revisions[name] = r
+
+				for _, counters := range s.replicas {
+					delete(counters, name)
+				}
+
+				s.replicas[memberName][name] = &c
+			} else if or == r {
+				if oc, ok := s.replicas[memberName][name]; !ok {
+					s.replicas[memberName][name] = &c
+				} else {
+					if c.Up > oc.Up {
+						oc.Up = c.Up
+					}
+					if c.Down > oc.Down {
+						oc.Down = c.Down
+					}
+				}
+			}
+		}
+	}()
 }
 
 func (s *Server) writeCounters(writer *bufio.Writer, memberName string) error {
@@ -214,15 +288,57 @@ func (s *Server) writeCounters(writer *bufio.Writer, memberName string) error {
 }
 
 func (s *Server) GetBroadcasts(overhead, limit int) [][]byte {
-	buffer := make(Buffer, 0, limit-overhead)
-	writer := bufio.NewWriter(&buffer)
-
 	s.l.RLock()
 	defer s.l.RUnlock()
 
-	if err := s.writeCounters(writer, s.Config.Name); err != nil {
+	if s.changes.Len() == 0 {
+		return nil
+	}
+
+	buffer := make(Buffer, 0, limit-overhead)
+	writer := bufio.NewWriter(&buffer)
+
+	if _, err := writer.WriteString(s.Config.Name + "\n"); err != nil {
 		s.logger.Printf("[ERR] %v", err)
 		return nil
+	}
+
+	if err := writer.Flush(); err != nil {
+		s.logger.Printf("[ERR] %v", err)
+		return nil
+	}
+
+	for {
+		name := s.changes.Peek()
+
+		if name == "" {
+			break
+		}
+
+		if _, err := writer.WriteString(name + "\n"); err != nil {
+			s.logger.Printf("[ERR] %v", err)
+			break
+		}
+
+		if err := binary.Write(writer, binary.LittleEndian, s.revisions[name]); err != nil {
+			s.logger.Printf("[ERR] %v", err)
+			break
+		}
+
+		if err := binary.Write(writer, binary.LittleEndian, s.counters[name]); err != nil {
+			s.logger.Printf("[ERR] %v", err)
+			break
+		}
+
+		if err := writer.Flush(); err != nil {
+			if err != io.EOF {
+				s.logger.Printf("[ERR] %v", err)
+			}
+
+			break
+		}
+
+		s.changes.Pop()
 	}
 
 	return [][]byte{buffer}
@@ -400,6 +516,8 @@ func (s *Server) inc(name string, diff float64) {
 		c.Down -= diff // diff is negative so -= adds it.
 	}
 
+	s.changes.Add(name)
+
 	s.l.Unlock()
 }
 
@@ -414,6 +532,8 @@ func (s *Server) reset(name string) {
 			c.Down = 0
 		}
 	}
+
+	s.changes.Add(name)
 
 	s.l.Unlock()
 }
@@ -677,6 +797,7 @@ func (s *Server) Join(hosts []string) error {
 	s.replicas[s.Config.Name] = make(map[string]*Counter, 0)
 	s.counters = s.replicas[s.Config.Name]
 	s.revisions = make(map[string]uint32, 0)
+	s.changes = NewChanges()
 	s.members = map[string]*State{
 		s.Config.Name: &State{
 			Active: 1, // Start in an inconsistent state until the first push/pull.
@@ -699,6 +820,7 @@ func New(bind, client string) *Server {
 		consistent: true,
 		replicas:   make(map[string]map[string]*Counter, 0),
 		revisions:  make(map[string]uint32, 0),
+		changes:    NewChanges(),
 		members:    make(map[string]*State, 0),
 		reconnects: make(map[string]struct{}, 0),
 	}

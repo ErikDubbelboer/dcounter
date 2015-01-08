@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"math/rand"
+	"strconv"
 	"sync"
 	"time"
 
@@ -20,19 +21,10 @@ func main() {
 
 	go func() {
 		for {
-			l.Lock()
-			amount, consistent, err := api.Get("campaign:1")
-			l.Unlock()
-			log.Printf("%f %v %v\n", amount, consistent, err)
+			n := strconv.FormatInt(rand.Int63n(600*3), 10)
 
-			time.Sleep(time.Second * 10)
-		}
-	}()
-
-	go func() {
-		for {
 			l.Lock()
-			if err := api.Reset("campaign:1"); err != nil {
+			if err := api.Reset("campaign:" + n); err != nil {
 				log.Println(err)
 			}
 			l.Unlock()
@@ -41,11 +33,11 @@ func main() {
 		}
 	}()
 
-	r := rand.New(rand.NewSource(0))
-
 	for {
+		n := strconv.FormatInt(rand.Int63n(600*3), 10)
+
 		l.Lock()
-		if err := api.Inc("campaign:1", r.Float64()); err != nil {
+		if err := api.Inc("campaign:"+n, rand.Float64()); err != nil {
 			log.Println(err)
 		}
 		l.Unlock()

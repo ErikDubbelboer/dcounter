@@ -22,13 +22,13 @@ run() {
   done
 }
 
-run "127.0.0.1:10001" 0.1 0.2 &
+run "127.0.0.1:10001" 0.1 0.4 &
 A=$!
 
-run "127.0.0.1:10002" 0.1 0.2 &
+run "127.0.0.1:10002" 0.1 0.4 &
 B=$!
 
-run "127.0.0.1:10001" -0.1 0.1 &
+run "127.0.0.1:10001" -0.1 0.2 &
 C=$!
 
 stop() {
@@ -51,5 +51,6 @@ trap stop SIGINT
 while :
 do
   ./dcounter cli -connect="127.0.0.1:10001" get test
+  ./dcounter cli -connect="127.0.0.1:10002" get test
   sleep 1
 done
