@@ -38,7 +38,7 @@ type Server struct {
 	replicas  map[string]map[string]*Counter
 	revisions map[string]uint32
 
-	changes *Changes
+	changes Changes
 
 	members map[string]*State
 
@@ -284,7 +284,7 @@ func (s *Server) GetBroadcasts(overhead, limit int) [][]byte {
 	s.l.RLock()
 	defer s.l.RUnlock()
 
-	if s.changes.Len() == 0 {
+	if len(s.changes) == 0 {
 		return nil
 	}
 
@@ -801,7 +801,7 @@ func (s *Server) Join(hosts []string) error {
 	s.replicas[s.Config.Name] = make(map[string]*Counter, 0)
 	s.counters = s.replicas[s.Config.Name]
 	s.revisions = make(map[string]uint32, 0)
-	s.changes = NewChanges()
+	s.changes = make(Changes, 0)
 	s.members = map[string]*State{
 		s.Config.Name: &State{
 			Active: 1, // Start in an inconsistent state until the first push/pull.
@@ -816,7 +816,7 @@ func (s *Server) Join(hosts []string) error {
 	return err
 }
 
-func New(bind, client string) *Server {
+func New(name, bind, client string) *Server {
 	s := Server{
 		client:     client,
 		m:          Meta{},
@@ -824,7 +824,7 @@ func New(bind, client string) *Server {
 		consistent: true,
 		replicas:   make(map[string]map[string]*Counter, 0),
 		revisions:  make(map[string]uint32, 0),
-		changes:    NewChanges(),
+		changes:    make(Changes, 0),
 		members:    make(map[string]*State, 0),
 		reconnects: make(map[string]struct{}, 0),
 	}
@@ -832,7 +832,7 @@ func New(bind, client string) *Server {
 	s.Config = memberlist.DefaultWANConfig()
 	s.Config.Delegate = &s
 	s.Config.Events = &s
-	s.Config.Name = RandomName()
+	s.Config.Name = name
 	s.Config.BindAddr, s.Config.BindPort = splitHostPort(bind)
 	s.Config.AdvertiseAddr = s.Config.BindAddr
 	s.Config.AdvertisePort = s.Config.BindPort

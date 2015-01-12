@@ -29,7 +29,7 @@ func main() {
 			}
 			l.Unlock()
 
-			time.Sleep(time.Minute * 5)
+			time.Sleep(time.Millisecond * 100)
 		}
 	}()
 

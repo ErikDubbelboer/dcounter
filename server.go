@@ -24,13 +24,18 @@ func (h *hosts) Set(value string) error {
 
 func server(arguments []string) {
 	flags := flag.NewFlagSet("server", flag.ExitOnError)
+	name := flags.String("name", "", "Name for this instance")
 	bind := flags.String("bind", "127.0.0.1:9373", "Sets the bind address for cluster communication")
 	client := flags.String("client", "127.0.0.1:9374", "Sets the address to bind for client access")
 	join := make(hosts, 0)
 	flags.Var(&join, "join", "Join these hosts after starting")
 	flags.Parse(arguments)
 
-	s := dc.New(*bind, *client)
+	if *name == "" {
+		*name = *bind
+	}
+
+	s := dc.New(*name, *bind, *client)
 
 	go func() {
 		s.Start()

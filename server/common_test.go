@@ -36,10 +36,9 @@ func NewTestServerOn(t BorT, name, bind, advertise string) *TestServer {
 
 	advertiseAddr, advertisePort := splitHostPort(advertise)
 
-	s.s = New(s.bind, s.client)
+	s.s = New(name, s.bind, s.client)
 	s.s.Config.AdvertiseAddr = advertiseAddr
 	s.s.Config.AdvertisePort = advertisePort
-	s.s.Config.Name = name
 	s.s.Config.LogOutput = s
 	s.s.Config.GossipInterval = 100 * time.Millisecond
 
