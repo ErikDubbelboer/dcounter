@@ -1,4 +1,4 @@
-package api
+package dcounter
 
 import (
 	"fmt"
@@ -195,11 +195,15 @@ func (api *API) Close() error {
 	return err
 }
 
-func Dial(network, address string) (*API, error) {
-	api := &API{
+func New(network, address string) *API {
+	return &API{
 		network: network,
 		address: address,
 	}
+}
+
+func Dial(network, address string) (*API, error) {
+	api := New(network, address)
 
 	if err := api.Ping(); err != nil {
 		return nil, err

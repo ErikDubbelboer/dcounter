@@ -24,7 +24,7 @@ type TestServer struct {
 	bind   string
 	s      *Server
 	t      BorT
-	a      *api.API
+	a      *dcounter.API
 }
 
 func NewTestServerOn(t BorT, name, bind, advertise string) *TestServer {
@@ -48,7 +48,7 @@ func NewTestServerOn(t BorT, name, bind, advertise string) *TestServer {
 	}
 
 	var err error
-	s.a, err = api.Dial("tcp", s.client)
+	s.a, err = dcounter.Dial("tcp", s.client)
 	if err != nil {
 		s.t.Fatal(err)
 	}

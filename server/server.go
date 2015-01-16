@@ -281,8 +281,8 @@ func (s *Server) writeCounters(writer *bufio.Writer, memberName string) error {
 }
 
 func (s *Server) GetBroadcasts(overhead, limit int) [][]byte {
-	s.l.RLock()
-	defer s.l.RUnlock()
+	s.l.Lock()
+	defer s.l.Unlock()
 
 	if len(s.changes) == 0 {
 		return nil
@@ -546,6 +546,13 @@ func (s *Server) list() map[string]float64 {
 		}
 	}
 	s.l.RUnlock()
+
+	// Don't return counters which have a value of 0.
+	for name, value := range l {
+		if value == 0 {
+			delete(l, name)
+		}
+	}
 
 	return l
 }

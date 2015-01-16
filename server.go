@@ -3,11 +3,11 @@ package main
 import (
 	"flag"
 	"log"
+	"net"
 	"os"
 	"os/signal"
-	"strings"
-	"net"
 	"strconv"
+	"strings"
 	"syscall"
 
 	dc "github.com/atomx/dcounter/server"

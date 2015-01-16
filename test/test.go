@@ -13,7 +13,7 @@ import (
 func main() {
 	var l sync.Mutex
 
-	api, err := api.Dial("tcp", "127.0.0.1:9374")
+	api, err := dcounter.Dial("tcp", "127.0.0.1:9374")
 	if err != nil {
 		panic(err)
 	}

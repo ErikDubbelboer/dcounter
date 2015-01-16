@@ -35,7 +35,7 @@ func bench(arguments []string) {
 	connect := flags.String("connect", "127.0.0.1:9374", "connect to this ip:port combination")
 	flags.Parse(arguments)
 
-	api, err := api.Dial("tcp", *connect)
+	api, err := dcounter.Dial("tcp", *connect)
 	if err != nil {
 		panic(err)
 	}
