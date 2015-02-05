@@ -127,15 +127,17 @@ func (s *Server) readCounters(reader *bufio.Reader) error {
 			s.replicas[memberName] = make(map[string]*Counter, 0)
 		}
 
-		if or := s.revisions[name]; r > or {
-			s.revisions[name] = r
+		if or := s.revisions[name]; r >= or {
+			if r > or {
+				s.revisions[name] = r
 
-			for _, counters := range s.replicas {
-				delete(counters, name)
+				for _, counters := range s.replicas {
+					delete(counters, name)
+				}
+
+				s.replicas[memberName][name] = &c
 			}
 
-			s.replicas[memberName][name] = &c
-		} else if or == r {
 			if oc, ok := s.replicas[memberName][name]; !ok {
 				s.replicas[memberName][name] = &c
 			} else {
@@ -519,7 +521,15 @@ func (s *Server) inc(name string, diff float64) {
 	s.l.Unlock()
 }
 
-func (s *Server) reset(name string) {
+func (s *Server) set(name string, value float64) {
+	var up, down float64
+
+	if value > 0 {
+		up = value
+	} else {
+		down = -value
+	}
+
 	s.l.Lock()
 
 	s.revisions[name] += 1
@@ -529,6 +539,17 @@ func (s *Server) reset(name string) {
 			c.Up = 0
 			c.Down = 0
 		}
+	}
+
+	if c, ok := s.counters[name]; !ok {
+		c = &Counter{
+			Up:   up,
+			Down: down,
+		}
+		s.counters[name] = c
+	} else {
+		c.Up = up
+		c.Down = down
 	}
 
 	s.changes.Add(name)
@@ -606,12 +627,12 @@ func (s *Server) handle(conn net.Conn) {
 				if err := p.Error(fmt.Errorf("INC requires exactly two arguments")); err != nil {
 					panic(err)
 				}
-			} else if amount, err := strconv.ParseFloat(args[1], 64); err != nil {
-				if err := p.Error(err); err != nil {
-					panic(err)
-				}
 			} else if args[0] == "" {
 				if err := p.Error(fmt.Errorf(`Invalid counter name ""`)); err != nil {
+					panic(err)
+				}
+			} else if amount, err := strconv.ParseFloat(args[1], 64); err != nil {
+				if err := p.Error(err); err != nil {
 					panic(err)
 				}
 			} else {
@@ -621,13 +642,21 @@ func (s *Server) handle(conn net.Conn) {
 					panic(err)
 				}
 			}
-		case "RESET":
-			if len(args) < 1 {
-				if err := p.Error(fmt.Errorf("RESET requires exactly one argument")); err != nil {
+		case "SET":
+			if len(args) < 2 {
+				if err := p.Error(fmt.Errorf("SET requires exactly two argument")); err != nil {
+					panic(err)
+				}
+			} else if args[0] == "" {
+				if err := p.Error(fmt.Errorf(`Invalid counter name ""`)); err != nil {
+					panic(err)
+				}
+			} else if value, err := strconv.ParseFloat(args[1], 64); err != nil {
+				if err := p.Error(err); err != nil {
 					panic(err)
 				}
 			} else {
-				s.reset(args[0])
+				s.set(args[0], value)
 
 				if err := p.Write("OK", []string{}); err != nil {
 					panic(err)

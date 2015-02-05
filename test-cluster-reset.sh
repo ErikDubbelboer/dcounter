@@ -21,7 +21,7 @@ sleep 1
 echo expect 2.0 from 2
 ./dcounter cli -connect="127.0.0.1:10002" get test
 echo reset 2
-./dcounter cli -connect="127.0.0.1:10002" reset test
+./dcounter cli -connect="127.0.0.1:10002" set test 0
 sleep 1
 echo expect 0.0 from 1
 ./dcounter cli -connect="127.0.0.1:10001" get test

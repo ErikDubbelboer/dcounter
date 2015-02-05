@@ -24,7 +24,7 @@ type TestServer struct {
 	bind   string
 	s      *Server
 	t      BorT
-	a      *dcounter.API
+	a      dcounter.API
 }
 
 func NewTestServerOn(t BorT, name, bind, advertise string) *TestServer {
@@ -103,10 +103,10 @@ func (s *TestServer) Inc(name string, diff float64) {
 	}
 }
 
-func (s *TestServer) Reset(name string) {
-	s.t.Logf("%s: reset %s", s.s.Config.Name, name)
+func (s *TestServer) Set(name string, value float64) {
+	s.t.Logf("%s: set %s %f", s.s.Config.Name, name, value)
 
-	if err := s.a.Reset(name); err != nil {
+	if err := s.a.Set(name, value); err != nil {
 		s.t.Error(err)
 	}
 }

@@ -13,7 +13,7 @@ func TestSimple(t *testing.T) {
 	s.Inc("test", 1)
 	s.Inc("test", 1)
 	s.Get("test", 2, true)
-	s.Reset("test")
+	s.Set("test", 0)
 	s.Get("test", 0, true)
 	s.Inc("test", 1)
 	s.Inc("test", -1)
@@ -21,12 +21,12 @@ func TestSimple(t *testing.T) {
 	s.Get("test", -1, true)
 }
 
-func TestReset(t *testing.T) {
+func TestSet(t *testing.T) {
 	//t.SkipNow()
 
 	s := NewTestServer(t, "s")
 
-	s.Reset("test")
+	s.Set("test", 0)
 }
 
 func BenchmarkGet(b *testing.B) {
@@ -53,7 +53,7 @@ func BenchmarkInc(b *testing.B) {
 	}
 }
 
-func BenchmarkReset(b *testing.B) {
+func BenchmarkSet(b *testing.B) {
 	//b.SkipNow()
 
 	s := NewTestServer(b, "s")
@@ -61,6 +61,6 @@ func BenchmarkReset(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		s.Reset("test")
+		s.Set("test", 0)
 	}
 }

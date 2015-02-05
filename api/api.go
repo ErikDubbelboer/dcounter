@@ -8,7 +8,20 @@ import (
 	"github.com/atomx/dcounter/proto"
 )
 
-type API struct {
+// API is the interface returned by New and Dial.
+// This is an interface so you can easily mock this interface
+// in your tests.
+type API interface {
+	Ping() error
+	Get(id string) (float64, bool, error)
+	Inc(id string, amount float64) error
+	Set(id string, value float64) error
+	List() (map[string]float64, error)
+	Join(hosts []string) error
+	Close() error
+}
+
+type api struct {
 	network string
 	address string
 
@@ -16,31 +29,32 @@ type API struct {
 	p *proto.Proto
 }
 
-func (api *API) connect() error {
+func (a *api) connect() error {
 	var err error
 
-	if api.c, err = net.Dial(api.network, api.address); err != nil {
+	if a.c, err = net.Dial(a.network, a.address); err != nil {
 		return err
 	}
 
-	api.p = proto.New(api.c)
+	a.p = proto.New(a.c)
 
 	return nil
 }
 
-func (api *API) Ping() error {
+func (a *api) Ping() error {
 	var err error
 
 	for i := 0; i < 2; i++ {
-		if api.c == nil {
-			if err := api.connect(); err != nil {
+		if a.c == nil {
+			if err := a.connect(); err != nil {
 				return err
 			}
 		}
 
-		if err = api.p.Write("PING", []string{}); err != nil {
+		if err = a.p.Write("PING", []string{}); err != nil {
+			a.c = nil
 			continue
-		} else if cmd, _, err := api.p.Read(); err != nil {
+		} else if cmd, _, err := a.p.Read(); err != nil {
 			return err
 		} else if cmd != "PONG" {
 			return fmt.Errorf("PONG expected")
@@ -50,19 +64,20 @@ func (api *API) Ping() error {
 	return err
 }
 
-func (api *API) Get(id string) (float64, bool, error) {
+func (a *api) Get(id string) (float64, bool, error) {
 	var err error
 
 	for i := 0; i < 2; i++ {
-		if api.c == nil {
-			if err := api.connect(); err != nil {
+		if a.c == nil {
+			if err := a.connect(); err != nil {
 				return 0, false, err
 			}
 		}
 
-		if err = api.p.Write("GET", []string{id}); err != nil {
+		if err = a.p.Write("GET", []string{id}); err != nil {
+			a.c = nil
 			continue
-		} else if cmd, args, err := api.p.Read(); err != nil {
+		} else if cmd, args, err := a.p.Read(); err != nil {
 			return 0, false, err
 		} else if cmd != "RET" {
 			return 0, false, fmt.Errorf("RET expected")
@@ -80,19 +95,20 @@ func (api *API) Get(id string) (float64, bool, error) {
 	return 0, true, err
 }
 
-func (api *API) Inc(id string, amount float64) error {
+func (a *api) Inc(id string, amount float64) error {
 	var err error
 
 	for i := 0; i < 2; i++ {
-		if api.c == nil {
-			if err := api.connect(); err != nil {
+		if a.c == nil {
+			if err := a.connect(); err != nil {
 				return err
 			}
 		}
 
-		if err = api.p.Write("INC", []string{id, strconv.FormatFloat(amount, 'f', -1, 64), "true"}); err != nil {
+		if err = a.p.Write("INC", []string{id, strconv.FormatFloat(amount, 'f', -1, 64)}); err != nil {
+			a.c = nil
 			continue
-		} else if cmd, _, err := api.p.Read(); err != nil {
+		} else if cmd, _, err := a.p.Read(); err != nil {
 			return err
 		} else if cmd != "OK" {
 			return fmt.Errorf("OK expected")
@@ -104,19 +120,20 @@ func (api *API) Inc(id string, amount float64) error {
 	return err
 }
 
-func (api *API) Reset(id string) error {
+func (a *api) Set(id string, value float64) error {
 	var err error
 
 	for i := 0; i < 2; i++ {
-		if api.c == nil {
-			if err := api.connect(); err != nil {
+		if a.c == nil {
+			if err := a.connect(); err != nil {
 				return err
 			}
 		}
 
-		if err = api.p.Write("RESET", []string{id}); err != nil {
+		if err = a.p.Write("SET", []string{id, strconv.FormatFloat(value, 'f', -1, 64)}); err != nil {
+			a.c = nil
 			continue
-		} else if cmd, _, err := api.p.Read(); err != nil {
+		} else if cmd, _, err := a.p.Read(); err != nil {
 			return err
 		} else if cmd != "OK" {
 			return fmt.Errorf("OK expected")
@@ -128,19 +145,20 @@ func (api *API) Reset(id string) error {
 	return err
 }
 
-func (api *API) List() (map[string]float64, error) {
+func (a *api) List() (map[string]float64, error) {
 	var err error
 
 	for i := 0; i < 2; i++ {
-		if api.c == nil {
-			if err := api.connect(); err != nil {
+		if a.c == nil {
+			if err := a.connect(); err != nil {
 				return nil, err
 			}
 		}
 
-		if err = api.p.Write("LIST", []string{}); err != nil {
+		if err = a.p.Write("LIST", []string{}); err != nil {
+			a.c = nil
 			continue
-		} else if cmd, args, err := api.p.Read(); err != nil {
+		} else if cmd, args, err := a.p.Read(); err != nil {
 			return nil, err
 		} else if cmd != "RET" {
 			return nil, fmt.Errorf("RET expected")
@@ -162,19 +180,20 @@ func (api *API) List() (map[string]float64, error) {
 	return nil, err
 }
 
-func (api *API) Join(hosts []string) error {
+func (a *api) Join(hosts []string) error {
 	var err error
 
 	for i := 0; i < 2; i++ {
-		if api.c == nil {
-			if err := api.connect(); err != nil {
+		if a.c == nil {
+			if err := a.connect(); err != nil {
 				return err
 			}
 		}
 
-		if err = api.p.Write("JOIN", hosts); err != nil {
+		if err = a.p.Write("JOIN", hosts); err != nil {
+			a.c = nil
 			continue
-		} else if cmd, _, err := api.p.Read(); err != nil {
+		} else if cmd, _, err := a.p.Read(); err != nil {
 			return err
 		} else if cmd != "OK" {
 			return fmt.Errorf("OK expected")
@@ -186,28 +205,31 @@ func (api *API) Join(hosts []string) error {
 	return err
 }
 
-func (api *API) Close() error {
-	err := api.c.Close()
+func (a *api) Close() error {
+	err := a.c.Close()
 
-	api.c = nil
-	api.p = nil
+	a.c = nil
+	a.p = nil
 
 	return err
 }
 
-func New(network, address string) *API {
-	return &API{
+// New returns a new API client but does not connect.
+// The connection will be made when the first command is run.
+func New(network, address string) API {
+	return &api{
 		network: network,
 		address: address,
 	}
 }
 
-func Dial(network, address string) (*API, error) {
-	api := New(network, address)
+// Dial tries to connect and if successful returns a new API client.
+func Dial(network, address string) (API, error) {
+	a := New(network, address)
 
-	if err := api.Ping(); err != nil {
+	if err := a.Ping(); err != nil {
 		return nil, err
 	}
 
-	return api, nil
+	return a, nil
 }

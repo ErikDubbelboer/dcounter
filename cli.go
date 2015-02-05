@@ -37,8 +37,10 @@ func cli(arguments []string) {
 		} else if err := api.Inc(flags.Arg(1), amount); err != nil {
 			fmt.Println(err)
 		}
-	} else if flags.Arg(0) == "reset" {
-		if err := api.Reset(flags.Arg(1)); err != nil {
+	} else if flags.Arg(0) == "set" {
+		if value, err := strconv.ParseFloat(flags.Arg(2), 64); err != nil {
+			fmt.Println(err)
+		} else if err := api.Set(flags.Arg(1), value); err != nil {
 			fmt.Println(err)
 		}
 	} else if flags.Arg(0) == "list" {
