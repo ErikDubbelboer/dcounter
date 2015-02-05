@@ -34,10 +34,9 @@ type Server struct {
 
 	consistent bool
 
-	counters  map[string]*Counter
-	replicas  map[string]map[string]*Counter
-	revisions map[string]uint32
+	replicas map[string]map[string]*Counter
 
+	resets  Resets
 	changes Changes
 
 	members map[string]*State
@@ -87,6 +86,8 @@ func (s *Server) readCounters(reader *bufio.Reader) error {
 		return err
 	}
 
+	s.logger.Printf("[DEBUG] reading %d counters", l)
+
 	if l == 0 {
 		return nil
 	}
@@ -108,17 +109,12 @@ func (s *Server) readCounters(reader *bufio.Reader) error {
 			name = n[:len(n)-1]
 		}
 
-		var r uint32
-		if err := binary.Read(reader, binary.LittleEndian, &r); err != nil {
-			return err
-		}
-
 		var c Counter
 		if err := binary.Read(reader, binary.LittleEndian, &c); err != nil {
 			return err
 		}
 
-		// If we don't know this id we can ignore it.
+		// If we don't know this member we can ignore it.
 		if _, ok := s.members[memberName]; !ok {
 			continue
 		}
@@ -127,26 +123,67 @@ func (s *Server) readCounters(reader *bufio.Reader) error {
 			s.replicas[memberName] = make(map[string]*Counter, 0)
 		}
 
-		if or := s.revisions[name]; r >= or {
-			if r > or {
-				s.revisions[name] = r
+		if oc, ok := s.replicas[memberName][name]; !ok || c.Revision > oc.Revision {
+			s.replicas[memberName][name] = &c
+		} else {
+			if c.Up > oc.Up {
+				oc.Up = c.Up
+			}
+			if c.Down > oc.Down {
+				oc.Down = c.Down
+			}
+		}
+	}
 
-				for _, counters := range s.replicas {
-					delete(counters, name)
-				}
+	return nil
+}
 
-				s.replicas[memberName][name] = &c
+func (s *Server) readResets(reader *bufio.Reader) error {
+	var jl uint32
+	if err := binary.Read(reader, binary.LittleEndian, &jl); err != nil {
+		return err
+	}
+
+	s.logger.Printf("[DEBUG] reading %d resets", jl)
+
+	for j := uint32(0); j < jl; j++ {
+		var name string
+		if s, err := reader.ReadString('\n'); err != nil {
+			return err
+		} else {
+			// Strip off the '\n'.
+			name = s[:len(s)-1]
+		}
+
+		var l uint32
+		if err := binary.Read(reader, binary.LittleEndian, &l); err != nil {
+			return err
+		}
+
+		for i := uint32(0); i < l; i++ {
+			var memberName string
+			if s, err := reader.ReadString('\n'); err != nil {
+				return err
+			} else {
+				// Strip off the '\n'.
+				memberName = s[:len(s)-1]
 			}
 
-			if oc, ok := s.replicas[memberName][name]; !ok {
-				s.replicas[memberName][name] = &c
-			} else {
-				if c.Up > oc.Up {
-					oc.Up = c.Up
-				}
-				if c.Down > oc.Down {
-					oc.Down = c.Down
-				}
+			var c Counter
+			if err := binary.Read(reader, binary.LittleEndian, &c); err != nil {
+				return err
+			}
+
+			if memberName != s.Config.Name {
+				continue
+			}
+
+			if oc, ok := s.replicas[s.Config.Name][name]; ok && c.Revision == oc.Revision {
+				oc.Up -= c.Up
+				oc.Down -= c.Down
+				oc.Revision += 1
+
+				s.changes.Add(name)
 			}
 		}
 	}
@@ -161,77 +198,17 @@ func (s *Server) NotifyMsg(msg []byte) {
 		s.l.Lock()
 		defer s.l.Unlock()
 
-		var memberName string
-		if n, err := reader.ReadString('\n'); err != nil {
+		if err := s.readResets(reader); err != nil {
 			if err != io.EOF {
 				s.logger.Printf("[ERR] %v", err)
+				return
 			}
-
-			return
-		} else {
-			// Strip off the '\n'.
-			memberName = n[:len(n)-1]
 		}
 
-		for {
-			var name string
-			if n, err := reader.ReadString('\n'); err != nil {
-				if err != io.EOF {
-					s.logger.Printf("[ERR] %v", err)
-				}
-
-				break
-			} else {
-				// Strip off the '\n'.
-				name = n[:len(n)-1]
-			}
-
-			var r uint32
-			if err := binary.Read(reader, binary.LittleEndian, &r); err != nil {
-				if err != io.EOF {
-					s.logger.Printf("[ERR] %v", err)
-				}
-
-				break
-			}
-
-			var c Counter
-			if err := binary.Read(reader, binary.LittleEndian, &c); err != nil {
-				if err != io.EOF {
-					s.logger.Printf("[ERR] %v", err)
-				}
-
-				break
-			}
-
-			// If we don't know this id we can ignore it.
-			if _, ok := s.members[memberName]; !ok {
-				continue
-			}
-
-			if _, ok := s.replicas[memberName]; !ok {
-				s.replicas[memberName] = make(map[string]*Counter, 0)
-			}
-
-			if or := s.revisions[name]; r > or {
-				s.revisions[name] = r
-
-				for _, counters := range s.replicas {
-					delete(counters, name)
-				}
-
-				s.replicas[memberName][name] = &c
-			} else if or == r {
-				if oc, ok := s.replicas[memberName][name]; !ok {
-					s.replicas[memberName][name] = &c
-				} else {
-					if c.Up > oc.Up {
-						oc.Up = c.Up
-					}
-					if c.Down > oc.Down {
-						oc.Down = c.Down
-					}
-				}
+		if err := s.readCounters(reader); err != nil {
+			if err != io.EOF {
+				s.logger.Printf("[ERR] %v", err)
+				return
 			}
 		}
 	}()
@@ -262,20 +239,12 @@ func (s *Server) writeCounters(writer *bufio.Writer, memberName string) error {
 			return err
 		}
 
-		if err := binary.Write(writer, binary.LittleEndian, s.revisions[name]); err != nil {
-			return err
-		}
-
 		if err := binary.Write(writer, binary.LittleEndian, c); err != nil {
 			return err
 		}
 
 		if err := writer.Flush(); err != nil {
-			//if err == io.EOF {
-			//	break
-			//} else {
 			return err
-			//}
 		}
 	}
 
@@ -292,6 +261,39 @@ func (s *Server) GetBroadcasts(overhead, limit int) [][]byte {
 
 	buffer := make(Buffer, 0, limit-overhead)
 	writer := bufio.NewWriter(&buffer)
+
+	if err := binary.Write(writer, binary.LittleEndian, uint32(len(s.resets))); err != nil {
+		s.logger.Printf("[ERR] %v", err)
+		return nil
+	}
+
+	for {
+		reset := s.resets.Peek()
+
+		if reset == nil {
+			break
+		}
+
+		if _, err := writer.Write(reset); err != nil {
+			s.logger.Printf("[ERR] %v", err)
+			break
+		}
+
+		if err := writer.Flush(); err != nil {
+			if err != io.EOF {
+				s.logger.Printf("[ERR] %v", err)
+			}
+
+			break
+		}
+
+		s.resets.Pop()
+	}
+
+	if err := binary.Write(writer, binary.LittleEndian, uint32(len(s.changes))); err != nil {
+		s.logger.Printf("[ERR] %v", err)
+		return nil
+	}
 
 	if _, err := writer.WriteString(s.Config.Name + "\n"); err != nil {
 		s.logger.Printf("[ERR] %v", err)
@@ -310,19 +312,14 @@ func (s *Server) GetBroadcasts(overhead, limit int) [][]byte {
 			break
 		}
 
+		c, ok := s.replicas[s.Config.Name][name]
+		if !ok {
+			break
+		}
+
 		if _, err := writer.WriteString(name + "\n"); err != nil {
 			s.logger.Printf("[ERR] %v", err)
 			break
-		}
-
-		if err := binary.Write(writer, binary.LittleEndian, s.revisions[name]); err != nil {
-			s.logger.Printf("[ERR] %v", err)
-			break
-		}
-
-		c, ok := s.counters[name]
-		if !ok {
-			c = emptyCounter
 		}
 
 		if err := binary.Write(writer, binary.LittleEndian, c); err != nil {
@@ -340,6 +337,8 @@ func (s *Server) GetBroadcasts(overhead, limit int) [][]byte {
 
 		s.changes.Pop()
 	}
+
+	s.logger.Printf("[DEBUG] %d byte broadcast", len(buffer))
 
 	return [][]byte{buffer}
 }
@@ -374,6 +373,8 @@ func (s *Server) LocalState(join bool) []byte {
 			return nil
 		}
 	}
+
+	s.logger.Printf("[DEBUG] %d byte local state", buffer.Len())
 
 	return buffer.Bytes()
 }
@@ -504,10 +505,10 @@ func (s *Server) get(name string) (float64, bool) {
 func (s *Server) inc(name string, diff float64) {
 	s.l.Lock()
 
-	c, ok := s.counters[name]
+	c, ok := s.replicas[s.Config.Name][name]
 	if !ok {
 		c = &Counter{}
-		s.counters[name] = c
+		s.replicas[s.Config.Name][name] = c
 	}
 
 	if diff > 0 {
@@ -521,7 +522,7 @@ func (s *Server) inc(name string, diff float64) {
 	s.l.Unlock()
 }
 
-func (s *Server) set(name string, value float64) {
+func (s *Server) set(name string, value float64) error {
 	var up, down float64
 
 	if value > 0 {
@@ -530,31 +531,61 @@ func (s *Server) set(name string, value float64) {
 		down = -value
 	}
 
+	buffer := bytes.Buffer{}
+	writer := bufio.NewWriter(&buffer)
+
+	if _, err := writer.WriteString(name + "\n"); err != nil {
+		return err
+	}
+
 	s.l.Lock()
+	defer s.l.Unlock()
 
-	s.revisions[name] += 1
+	l := uint32(len(s.replicas)) - 1
 
-	for _, counters := range s.replicas {
-		if c, ok := counters[name]; ok {
-			c.Up = 0
-			c.Down = 0
+	if err := binary.Write(writer, binary.LittleEndian, l); err != nil {
+		return err
+	}
+
+	if err := writer.Flush(); err != nil {
+		return err
+	}
+
+	for memberName, counters := range s.replicas {
+		// We don't need to broadcast our own counter.
+		if memberName == s.Config.Name {
+			continue
+		}
+
+		counter, ok := counters[name]
+		if !ok {
+			counter = emptyCounter
+		}
+
+		if _, err := writer.WriteString(memberName + "\n"); err != nil {
+			return err
+		}
+
+		if err := binary.Write(writer, binary.LittleEndian, counter); err != nil {
+			return err
 		}
 	}
 
-	if c, ok := s.counters[name]; !ok {
-		c = &Counter{
-			Up:   up,
-			Down: down,
-		}
-		s.counters[name] = c
-	} else {
+	if err := writer.Flush(); err != nil {
+		return err
+	}
+
+	s.resets.Add(buffer.Bytes())
+
+	if c, ok := s.replicas[s.Config.Name][name]; ok {
 		c.Up = up
 		c.Down = down
+		c.Revision += 1
+
+		s.changes.Add(name)
 	}
 
-	s.changes.Add(name)
-
-	s.l.Unlock()
+	return nil
 }
 
 func (s *Server) list() map[string]float64 {
@@ -655,12 +686,12 @@ func (s *Server) handle(conn net.Conn) {
 				if err := p.Error(err); err != nil {
 					panic(err)
 				}
-			} else {
-				s.set(args[0], value)
-
-				if err := p.Write("OK", []string{}); err != nil {
+			} else if err := s.set(args[0], value); err != nil {
+				if err := p.Error(err); err != nil {
 					panic(err)
 				}
+			} else if err := p.Write("OK", []string{}); err != nil {
+				panic(err)
 			}
 		case "LIST":
 			counters := s.list()
@@ -764,7 +795,6 @@ func (s *Server) reconnect() {
 
 func (s *Server) Start() error {
 	s.replicas[s.Config.Name] = make(map[string]*Counter, 0)
-	s.counters = s.replicas[s.Config.Name]
 
 	s.members[s.Config.Name] = &State{
 		Active: 1,
@@ -835,8 +865,6 @@ func (s *Server) Join(hosts []string) error {
 
 	s.replicas = make(map[string]map[string]*Counter, 0)
 	s.replicas[s.Config.Name] = make(map[string]*Counter, 0)
-	s.counters = s.replicas[s.Config.Name]
-	s.revisions = make(map[string]uint32, 0)
 	s.changes = make(Changes, 0)
 	s.members = map[string]*State{
 		s.Config.Name: &State{
@@ -859,7 +887,6 @@ func New(name, bind, client string) *Server {
 		stop:       make(chan struct{}, 0),
 		consistent: true,
 		replicas:   make(map[string]map[string]*Counter, 0),
-		revisions:  make(map[string]uint32, 0),
 		changes:    make(Changes, 0),
 		members:    make(map[string]*State, 0),
 		reconnects: make(map[string]struct{}, 0),
