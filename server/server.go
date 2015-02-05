@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -609,6 +610,14 @@ func (s *Server) list() map[string]float64 {
 	return l
 }
 
+func (s *Server) save() (string, error) {
+	s.l.RLock()
+	defer s.l.RUnlock()
+
+	data, err := json.Marshal(s.replicas)
+	return string(data), err
+}
+
 func (s *Server) handle(conn net.Conn) {
 	defer func() {
 		if err := recover(); err != nil {
@@ -711,6 +720,14 @@ func (s *Server) handle(conn net.Conn) {
 					panic(err)
 				}
 			} else if err := p.Write("OK", []string{}); err != nil {
+				panic(err)
+			}
+		case "SAVE":
+			if data, err := s.save(); err != nil {
+				if err := p.Error(err); err != nil {
+					panic(err)
+				}
+			} else if err := p.Write("RET", []string{data}); err != nil {
 				panic(err)
 			}
 		default:
@@ -865,6 +882,7 @@ func (s *Server) Join(hosts []string) error {
 
 	s.replicas = make(map[string]map[string]*Counter, 0)
 	s.replicas[s.Config.Name] = make(map[string]*Counter, 0)
+	s.resets = make(Resets, 0)
 	s.changes = make(Changes, 0)
 	s.members = map[string]*State{
 		s.Config.Name: &State{
@@ -880,6 +898,46 @@ func (s *Server) Join(hosts []string) error {
 	return err
 }
 
+func (s *Server) Load(filename string) error {
+	f, err := os.Open(filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	decoder := json.NewDecoder(f)
+
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	err = decoder.Decode(&s.replicas)
+
+	if _, ok := s.replicas[s.Config.Name]; !ok {
+		s.replicas[s.Config.Name] = make(map[string]*Counter, 0)
+	}
+
+	return err
+}
+
+func (s *Server) Save(filename string) (err error) {
+	f, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if nerr := f.Close(); nerr != nil && err != nil {
+			err = nerr
+		}
+	}()
+
+	encoder := json.NewEncoder(f)
+
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	return encoder.Encode(s.replicas)
+}
+
 func New(name, bind, client string) *Server {
 	s := Server{
 		client:     client,
@@ -887,6 +945,7 @@ func New(name, bind, client string) *Server {
 		stop:       make(chan struct{}, 0),
 		consistent: true,
 		replicas:   make(map[string]map[string]*Counter, 0),
+		resets:     make(Resets, 0),
 		changes:    make(Changes, 0),
 		members:    make(map[string]*State, 0),
 		reconnects: make(map[string]struct{}, 0),

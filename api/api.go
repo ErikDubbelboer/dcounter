@@ -18,6 +18,7 @@ type API interface {
 	Set(id string, value float64) error
 	List() (map[string]float64, error)
 	Join(hosts []string) error
+	Save() (string, error)
 	Close() error
 }
 
@@ -203,6 +204,31 @@ func (a *api) Join(hosts []string) error {
 	}
 
 	return err
+}
+
+func (a *api) Save() (string, error) {
+	var err error
+
+	for i := 0; i < 2; i++ {
+		if a.c == nil {
+			if err := a.connect(); err != nil {
+				return "", err
+			}
+		}
+
+		if err = a.p.Write("SAVE", []string{}); err != nil {
+			a.c = nil
+			continue
+		} else if cmd, args, err := a.p.Read(); err != nil {
+			return "", err
+		} else if cmd != "RET" {
+			return "", fmt.Errorf("RET expected")
+		} else {
+			return args[0], nil
+		}
+	}
+
+	return "", err
 }
 
 func (a *api) Close() error {

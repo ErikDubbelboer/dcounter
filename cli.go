@@ -55,5 +55,11 @@ func cli(arguments []string) {
 		if err := api.Join(flags.Args()[1:]); err != nil {
 			fmt.Println(err)
 		}
+	} else if flags.Arg(0) == "save" {
+		if data, err := api.Save(); err != nil {
+			fmt.Println(err)
+		} else {
+			fmt.Println(data)
+		}
 	}
 }

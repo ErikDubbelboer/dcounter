@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	dc "github.com/atomx/dcounter/server"
 )
@@ -32,6 +33,9 @@ func server(arguments []string) {
 	client := flags.String("client", "127.0.0.1:9374", "Sets the address to bind for client access")
 	join := make(hosts, 0)
 	flags.Var(&join, "join", "Join these hosts after starting")
+	load := flags.String("load", "", "json file to load data from")
+	save := flags.String("save", "", "json file to save data to")
+	saveInterval := flags.Duration("save-interval", time.Minute, "how often to save the data")
 	flags.Parse(arguments)
 
 	if *name == "" {
@@ -49,15 +53,37 @@ func server(arguments []string) {
 
 	s := dc.New(*name, bind, *client)
 
-	go func() {
-		s.Start()
-
-		if len(join) > 0 {
-			if err := s.Join(join); err != nil {
-				log.Printf("[ERR] %v", err)
-			}
+	if err := s.Start(); err != nil {
+		log.Printf("[ERR] %v", err)
+		return
+	}
+	defer func() {
+		if err := s.Stop(); err != nil {
+			log.Printf("[ERR] %v", err)
 		}
 	}()
+
+	if len(join) > 0 {
+		if err := s.Join(join); err != nil {
+			log.Printf("[ERR] %v", err)
+		}
+	} else if *load != "" {
+		if err := s.Load(*load); err != nil {
+			log.Printf("[ERR] %v", err)
+		}
+	}
+
+	if *save != "" {
+		go func(filename string, interval time.Duration) {
+			for {
+				time.Sleep(interval)
+
+				if err := s.Save(filename); err != nil {
+					log.Printf("[ERR] %v", err)
+				}
+			}
+		}(*save, *saveInterval)
+	}
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGINT, syscall.SIGQUIT)
@@ -65,8 +91,4 @@ func server(arguments []string) {
 	<-c
 
 	signal.Stop(c)
-
-	if err := s.Stop(); err != nil {
-		log.Printf("[ERR] %v", err)
-	}
 }

@@ -1,0 +1,37 @@
+
+counters:
+
+<number of counters = n>
+<member name (if n > 0)>
+n * 
+  <name\n>
+  <counter>
+
+
+
+
+resets:
+
+<number of resets = n>
+n *
+  <name\n>
+  <number of replicas = m>
+  m *
+    <member name>
+    <counter>
+
+
+
+
+notify:
+<resets>
+<counters (changes)>
+
+
+
+
+state:
+<state>
+for each replica:
+  <counters>
+
