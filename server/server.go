@@ -964,7 +964,7 @@ func (s *Server) Save(filename string) (err error) {
 	return encoder.Encode(s.replicas)
 }
 
-func New(name, bind, client string) *Server {
+func New(name, bind, advertise, client string) (*Server, error) {
 	s := Server{
 		client:     client,
 		m:          Meta{},
@@ -981,9 +981,6 @@ func New(name, bind, client string) *Server {
 	s.Config.Delegate = &s
 	s.Config.Events = &s
 	s.Config.Name = name
-	s.Config.BindAddr, s.Config.BindPort = splitHostPort(bind)
-	s.Config.AdvertiseAddr = s.Config.BindAddr
-	s.Config.AdvertisePort = s.Config.BindPort
 
 	s.Config.SuspicionMult = 2
 	s.Config.PushPullInterval = 60 * time.Second
@@ -992,5 +989,21 @@ func New(name, bind, client string) *Server {
 	s.Config.GossipNodes = 4
 	s.Config.GossipInterval = 500 * time.Millisecond
 
-	return &s
+	ip, port, err := splitHostPort(bind, 9373)
+	if err != nil {
+		return nil, err
+	}
+
+	s.Config.BindAddr = ip
+	s.Config.BindPort = port
+
+	ip, port, err = splitHostPort(advertise, port)
+	if err != nil {
+		return nil, err
+	}
+
+	s.Config.AdvertiseAddr = ip
+	s.Config.AdvertisePort = port
+
+	return &s, nil
 }

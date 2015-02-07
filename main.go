@@ -1,34 +1,28 @@
 package main
 
 import (
-	"flag"
-	"fmt"
 	"os"
+
+	"github.com/codegangsta/cli"
 )
 
 const VERSION = "0.1.0"
 
-func usageExit() {
-	fmt.Fprintf(os.Stderr, "Usage: %s [cli|server]\n", os.Args[0])
-	os.Exit(2)
+var app = &cli.App{
+	Name:         "dcounter",
+	Usage:        "high performance, eventually consisten, distributed counters.",
+	Version:      VERSION,
+	BashComplete: cli.DefaultAppComplete,
+	Author:       "Erik Dubbelboer",
+	Email:        "erik@dubbelboer.com",
+	Commands:     []cli.Command{},
+	Writer:       os.Stdout,
+}
+
+func init() {
+	app.Action = cli.NewApp().Action
 }
 
 func main() {
-	flag.Parse()
-	args := flag.Args()
-	if len(args) < 1 {
-		usageExit()
-	}
-
-	if args[0] == "cli" {
-		cli(args[1:])
-	} else if args[0] == "server" {
-		server(args[1:])
-	} else if args[0] == "bench" {
-		bench(args[1:])
-	} else if args[0] == "version" {
-		fmt.Println(VERSION)
-	} else {
-		usageExit()
-	}
+	app.Run(os.Args)
 }

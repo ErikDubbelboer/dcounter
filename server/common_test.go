@@ -20,25 +20,26 @@ type BorT interface {
 }
 
 type TestServer struct {
-	client string
-	bind   string
-	s      *Server
-	t      BorT
-	a      dcounter.API
+	client    string
+	advertise string
+	s         *Server
+	t         BorT
+	a         dcounter.API
 }
 
 func NewTestServerOn(t BorT, name, bind, advertise string) *TestServer {
 	s := &TestServer{
-		client: "127.0.0.1:" + strconv.FormatInt(1000+rand.Int63n(10000), 10),
-		bind:   bind,
-		t:      t,
+		client:    "127.0.0.1:" + strconv.FormatInt(1000+rand.Int63n(10000), 10),
+		advertise: advertise,
+		t:         t,
 	}
 
-	advertiseAddr, advertisePort := splitHostPort(advertise)
+	var err error
+	s.s, err = New(name, bind, advertise, s.client)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	s.s = New(name, s.bind, s.client)
-	s.s.Config.AdvertiseAddr = advertiseAddr
-	s.s.Config.AdvertisePort = advertisePort
 	s.s.Config.LogOutput = s
 	s.s.Config.GossipInterval = 100 * time.Millisecond
 
@@ -47,7 +48,6 @@ func NewTestServerOn(t BorT, name, bind, advertise string) *TestServer {
 		t.Fatal(err)
 	}
 
-	var err error
 	s.a, err = dcounter.Dial("tcp", s.client)
 	if err != nil {
 		s.t.Fatal(err)
@@ -114,7 +114,7 @@ func (s *TestServer) Set(name string, value float64) {
 func (s *TestServer) Join(o *TestServer) {
 	s.t.Logf("%s: join %s", s.s.Config.Name, o.s.Config.Name)
 
-	if err := s.a.Join([]string{o.bind}); err != nil {
+	if err := s.a.Join([]string{o.advertise}); err != nil {
 		s.t.Error(err)
 	}
 }

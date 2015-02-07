@@ -1,94 +1,140 @@
 package main
 
 import (
-	"flag"
 	"log"
-	"net"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
-	dc "github.com/atomx/dcounter/server"
+	"github.com/atomx/dcounter/server"
+	"github.com/codegangsta/cli"
 )
 
-type hosts []string
-
-func (h *hosts) String() string {
-	return strings.Join(*h, ",")
-}
-
-func (h *hosts) Set(value string) error {
-	*h = append(*h, value)
-	return nil
-}
-
-func server(arguments []string) {
-	flags := flag.NewFlagSet("server", flag.ExitOnError)
-	name := flags.String("name", "", "Name for this instance")
-	bindAddr := flags.String("bind-addr", "127.0.0.1:9373", "Sets the bind address for cluster communication")
-	bindPort := flags.Int("bind-port", 9373, "Sets the bind port address for cluster communication")
-	client := flags.String("client", "127.0.0.1:9374", "Sets the address to bind for client access")
-	join := make(hosts, 0)
-	flags.Var(&join, "join", "Join these hosts after starting")
-	load := flags.String("load", "", "json file to load data from")
-	save := flags.String("save", "", "json file to save data to")
-	saveInterval := flags.Duration("save-interval", time.Minute, "how often to save the data")
-	flags.Parse(arguments)
-
-	if *name == "" {
-		*name = *bindAddr
-	}
-
-	if ips, err := net.LookupIP(*bindAddr); err != nil {
-		log.Printf("[ERR] %v", err)
-		return
-	} else {
-		*bindAddr = ips[0].String()
-	}
-
-	bind := *bindAddr + ":" + strconv.FormatInt(int64(*bindPort), 10)
-
-	s := dc.New(*name, bind, *client)
-
-	if err := s.Start(); err != nil {
-		log.Printf("[ERR] %v", err)
-		return
-	}
-	defer func() {
-		if err := s.Stop(); err != nil {
-			log.Printf("[ERR] %v", err)
-		}
-	}()
-
-	if len(join) > 0 {
-		if err := s.Join(join); err != nil {
-			log.Printf("[ERR] %v", err)
-		}
-	} else if *load != "" {
-		if err := s.Load(*load); err != nil {
-			log.Printf("[ERR] %v", err)
-		}
-	}
-
-	if *save != "" {
-		go func(filename string, interval time.Duration) {
-			for {
-				time.Sleep(interval)
-
-				if err := s.Save(filename); err != nil {
-					log.Printf("[ERR] %v", err)
-				}
-			}
-		}(*save, *saveInterval)
-	}
-
+func waitForSignal() {
+	// Wait for SIGINT or SIGQUIT to stop.
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGINT, syscall.SIGQUIT)
 
 	<-c
 
+	// Stop listening for signals, this cases a
+	// second signal to force a quit.
 	signal.Stop(c)
+}
+
+func init() {
+	hostname, err := os.Hostname()
+	if err != nil {
+		log.Printf("[ERR] %v", err)
+		os.Exit(1)
+	}
+
+	app.Commands = append(app.Commands, cli.Command{
+		Name:  "server",
+		Usage: "Run a server.",
+		Flags: []cli.Flag{
+			cli.StringFlag{
+				Name:  "name, n",
+				Value: hostname,
+				Usage: "Name of this node in the cluster. This must be unique within the cluster.",
+			},
+			cli.StringFlag{
+				Name:  "bind, b",
+				Value: "127.0.0.1:9373",
+				Usage: "The address that should be bound to for internal cluster communications.",
+			},
+			cli.StringFlag{
+				Name:  "advertise, a",
+				Value: "",
+				Usage: "The address that should be used to broadcast, can be different than the bind address in case of a NAT.",
+			},
+			cli.StringFlag{
+				Name:  "client, c",
+				Value: "127.0.0.1:9374",
+				Usage: "The address that should be bound to for client communications.",
+			},
+			cli.StringSliceFlag{
+				Name:  "join, j",
+				Value: &cli.StringSlice{},
+				Usage: "Join these hosts after starting.",
+			},
+			cli.StringFlag{
+				Name:  "load, l",
+				Value: "",
+				Usage: "Load data from this json file.",
+			},
+			cli.StringFlag{
+				Name:  "save, s",
+				Value: "",
+				Usage: "Persist data to this json file.",
+			},
+			cli.DurationFlag{
+				Name:  "save-interval, i",
+				Value: time.Minute,
+				Usage: "Persist data this often.",
+			},
+		},
+		Action: func(c *cli.Context) {
+			join := c.StringSlice("join")
+
+			if len(join) > 0 && c.String("load") != "" {
+				log.Printf("And not use --load and --join at the same time")
+				return
+			}
+
+			advertise := c.String("advertise")
+
+			if advertise == "" {
+				advertise = c.String("bind")
+			}
+
+			s, err := server.New(c.String("name"), c.String("bind"), advertise, c.String("client"))
+			if err != nil {
+				log.Printf("[ERR] %v", err)
+				return
+			}
+
+			if err := s.Start(); err != nil {
+				log.Printf("[ERR] %v", err)
+				return
+			}
+			defer func() {
+				if err := s.Stop(); err != nil {
+					log.Printf("[ERR] %v", err)
+				}
+			}()
+
+			if len(join) > 0 {
+				for i, s := range join {
+					if !strings.ContainsRune(s, ':') {
+						join[i] += ":9373"
+					}
+				}
+
+				if err := s.Join(join); err != nil {
+					log.Printf("[ERR] %v", err)
+				}
+			} else if c.String("load") != "" {
+				if err := s.Load(c.String("load")); err != nil {
+					log.Printf("[ERR] %v", err)
+				}
+			}
+
+			if c.String("save") != "" {
+				go func(filename string, interval time.Duration) {
+					for {
+						time.Sleep(interval)
+
+						if err := s.Save(filename); err != nil {
+							log.Printf("[ERR] %v", err)
+						}
+					}
+				}(c.String("save"), c.Duration("interval"))
+			}
+
+			waitForSignal()
+		},
+	})
 }

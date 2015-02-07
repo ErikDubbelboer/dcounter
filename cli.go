@@ -1,73 +1,179 @@
 package main
 
 import (
-	"flag"
 	"fmt"
+	"log"
 	"strconv"
 
 	"github.com/atomx/dcounter/api"
+	"github.com/codegangsta/cli"
+	"github.com/ryanuber/columnize"
 )
 
-func cli(arguments []string) {
-	flags := flag.NewFlagSet("cli", flag.ExitOnError)
-	connect := flags.String("connect", "127.0.0.1:9374", "connect to this ip:port combination")
-	flags.Parse(arguments)
-
-	api, err := dcounter.Dial("tcp", *connect)
-	if err != nil {
-		panic(err)
+func init() {
+	connect := []cli.Flag{
+		cli.StringFlag{
+			Name:  "connect, c",
+			Value: "127.0.0.1:9374",
+			Usage: "connect to this ip:port combination",
+		},
 	}
-	defer api.Close()
 
-	if flags.Arg(0) == "get" {
-		amount, consistent, err := api.Get(flags.Arg(1))
-		if err != nil {
-			fmt.Println(err)
-		} else {
-			state := "CONSISTENT"
-			if !consistent {
-				state = "INCONSISTENT"
-			}
+	app.Commands = append(app.Commands, cli.Command{
+		Name:  "cli",
+		Usage: "run commands",
+		Subcommands: []cli.Command{
+			{
+				Name:  "get",
+				Usage: "get the value of a counter",
+				Flags: connect,
+				Action: func(c *cli.Context) {
+					api, err := dcounter.Dial("tcp", c.String("connect"))
+					if err != nil {
+						log.Printf("[ERR] %v", err)
+						return
+					}
+					defer api.Close()
 
-			fmt.Printf("%f (%s)\n", amount, state)
-		}
-	} else if flags.Arg(0) == "inc" {
-		if amount, err := strconv.ParseFloat(flags.Arg(2), 64); err != nil {
-			fmt.Println(err)
-		} else if err := api.Inc(flags.Arg(1), amount); err != nil {
-			fmt.Println(err)
-		}
-	} else if flags.Arg(0) == "set" {
-		if value, err := strconv.ParseFloat(flags.Arg(2), 64); err != nil {
-			fmt.Println(err)
-		} else if err := api.Set(flags.Arg(1), value); err != nil {
-			fmt.Println(err)
-		}
-	} else if flags.Arg(0) == "list" {
-		if list, err := api.List(); err != nil {
-			fmt.Println(err)
-		} else {
-			for name, value := range list {
-				fmt.Printf("%s: %f\n", name, value)
-			}
-		}
-	} else if flags.Arg(0) == "join" {
-		if err := api.Join(flags.Args()[1:]); err != nil {
-			fmt.Println(err)
-		}
-	} else if flags.Arg(0) == "save" {
-		if data, err := api.Save(); err != nil {
-			fmt.Println(err)
-		} else {
-			fmt.Println(data)
-		}
-	} else if flags.Arg(0) == "members" {
-		if members, err := api.Members(); err != nil {
-			fmt.Println(err)
-		} else {
-			for _, member := range members {
-				fmt.Printf("%s\t%s\n", member.Addr, member.Name)
-			}
-		}
-	}
+					amount, consistent, err := api.Get(c.Args().Get(0))
+					if err != nil {
+						log.Printf("[ERR] %v", err)
+					} else {
+						state := "CONSISTENT"
+						if !consistent {
+							state = "INCONSISTENT"
+						}
+
+						fmt.Printf("%f (%s)\n", amount, state)
+					}
+				},
+			},
+			{
+				Name:  "inc",
+				Usage: "increment a counter",
+				Flags: connect,
+				Action: func(c *cli.Context) {
+					api, err := dcounter.Dial("tcp", c.String("connect"))
+					if err != nil {
+						log.Printf("[ERR] %v", err)
+						return
+					}
+					defer api.Close()
+
+					if amount, err := strconv.ParseFloat(c.Args().Get(1), 64); err != nil {
+						fmt.Println(err)
+					} else if err := api.Inc(c.Args().Get(0), amount); err != nil {
+						fmt.Println(err)
+					} else {
+						fmt.Println("OK")
+					}
+				},
+			},
+			{
+				Name:  "set",
+				Usage: "set the value of a counter",
+				Flags: connect,
+				Action: func(c *cli.Context) {
+					api, err := dcounter.Dial("tcp", c.String("connect"))
+					if err != nil {
+						log.Printf("[ERR] %v", err)
+						return
+					}
+					defer api.Close()
+
+					if amount, err := strconv.ParseFloat(c.Args().Get(1), 64); err != nil {
+						fmt.Println(err)
+					} else if err := api.Set(c.Args().Get(0), amount); err != nil {
+						fmt.Println(err)
+					} else {
+						fmt.Println("OK")
+					}
+				},
+			},
+			{
+				Name:  "list",
+				Usage: "list all counters and their values",
+				Flags: connect,
+				Action: func(c *cli.Context) {
+					api, err := dcounter.Dial("tcp", c.String("connect"))
+					if err != nil {
+						log.Printf("[ERR] %v", err)
+						return
+					}
+					defer api.Close()
+
+					if list, err := api.List(); err != nil {
+						log.Printf("[ERR] %v", err)
+					} else {
+						for name, value := range list {
+							fmt.Printf("%s: %f\n", name, value)
+						}
+					}
+				},
+			},
+			{
+				Name:  "join",
+				Usage: "join a cluster",
+				Flags: connect,
+				Action: func(c *cli.Context) {
+					api, err := dcounter.Dial("tcp", c.String("connect"))
+					if err != nil {
+						log.Printf("[ERR] %v", err)
+						return
+					}
+					defer api.Close()
+
+					if err := api.Join(c.Args()); err != nil {
+						log.Printf("[ERR] %v", err)
+					} else {
+						fmt.Println("OK")
+					}
+				},
+			},
+			{
+				Name:  "members",
+				Usage: "list the members in the cluster",
+				Flags: connect,
+				Action: func(c *cli.Context) {
+					api, err := dcounter.Dial("tcp", c.String("connect"))
+					if err != nil {
+						log.Printf("[ERR] %v", err)
+						return
+					}
+					defer api.Close()
+
+					if members, err := api.Members(); err != nil {
+						log.Printf("[ERR] %v", err)
+					} else {
+						result := []string{"Name|Address"}
+
+						for _, member := range members {
+							result = append(result, fmt.Sprintf("%s|%s\n", member.Name, member.Addr))
+						}
+
+						fmt.Println(columnize.SimpleFormat(result))
+					}
+				},
+			},
+			{
+				Name:  "save",
+				Usage: "return the state of the server as json",
+				Flags: connect,
+				Action: func(c *cli.Context) {
+					api, err := dcounter.Dial("tcp", c.String("connect"))
+					if err != nil {
+						log.Printf("[ERR] %v", err)
+						return
+					}
+					defer api.Close()
+
+					if data, err := api.Save(); err != nil {
+						log.Printf("[ERR] %v", err)
+					} else {
+						fmt.Println(data)
+					}
+				},
+			},
+		},
+	})
 }

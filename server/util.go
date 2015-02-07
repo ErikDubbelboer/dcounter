@@ -2,13 +2,14 @@ package server
 
 import (
 	"net"
-	//"net/http"
-	//_ "net/http/pprof"
+	"net/http"
+	_ "net/http/pprof"
 	"strconv"
+	"strings"
 )
 
 func init() {
-	//go http.ListenAndServe(":12345", nil)
+	go http.ListenAndServe(":12347", nil)
 }
 
 func min(a, b int) int {
@@ -18,10 +19,19 @@ func min(a, b int) int {
 	return b
 }
 
-func splitHostPort(hostport string) (string, int) {
-	addr, portStr, err := net.SplitHostPort(hostport)
+func splitHostPort(hostport string, defaultPort int) (string, int, error) {
+	if !strings.ContainsRune(hostport, ':') {
+		hostport += ":" + strconv.FormatInt(int64(defaultPort), 10)
+	}
+
+	host, portStr, err := net.SplitHostPort(hostport)
 	if err != nil {
-		panic(err)
+		return "", 0, err
+	}
+
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return "", 0, err
 	}
 
 	port, err := strconv.ParseInt(portStr, 10, 32)
@@ -29,5 +39,5 @@ func splitHostPort(hostport string) (string, int) {
 		panic(err)
 	}
 
-	return addr, int(port)
+	return ips[0].String(), int(port), nil
 }
