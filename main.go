@@ -6,6 +6,8 @@ import (
 	"os"
 )
 
+const VERSION = "0.1.0"
+
 func usageExit() {
 	fmt.Fprintf(os.Stderr, "Usage: %s [cli|server]\n", os.Args[0])
 	os.Exit(2)
@@ -24,6 +26,8 @@ func main() {
 		server(args[1:])
 	} else if args[0] == "bench" {
 		bench(args[1:])
+	} else if args[0] == "version" {
+		fmt.Println(VERSION)
 	} else {
 		usageExit()
 	}

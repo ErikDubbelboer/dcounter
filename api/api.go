@@ -1,12 +1,18 @@
 package dcounter
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"strconv"
 
 	"github.com/atomx/dcounter/proto"
 )
+
+type Member struct {
+	Name string
+	Addr net.IP
+}
 
 // API is the interface returned by New and Dial.
 // This is an interface so you can easily mock this interface
@@ -19,6 +25,7 @@ type API interface {
 	List() (map[string]float64, error)
 	Join(hosts []string) error
 	Save() (string, error)
+	Members() ([]Member, error)
 	Close() error
 }
 
@@ -229,6 +236,35 @@ func (a *api) Save() (string, error) {
 	}
 
 	return "", err
+}
+
+func (a *api) Members() ([]Member, error) {
+	var err error
+
+	for i := 0; i < 2; i++ {
+		if a.c == nil {
+			if err := a.connect(); err != nil {
+				return nil, err
+			}
+		}
+
+		var members []Member
+
+		if err = a.p.Write("MEMBERS", []string{}); err != nil {
+			a.c = nil
+			continue
+		} else if cmd, args, err := a.p.Read(); err != nil {
+			return nil, err
+		} else if cmd != "RET" {
+			return nil, fmt.Errorf("RET expected")
+		} else if err := json.Unmarshal([]byte(args[0]), &members); err != nil {
+			return nil, err
+		} else {
+			return members, nil
+		}
+	}
+
+	return nil, err
 }
 
 func (a *api) Close() error {

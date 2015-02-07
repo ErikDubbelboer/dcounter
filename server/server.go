@@ -17,6 +17,8 @@ import (
 
 	"github.com/atomx/dcounter/proto"
 	"github.com/hashicorp/memberlist"
+
+	api "github.com/atomx/dcounter/api"
 )
 
 type Server struct {
@@ -582,9 +584,14 @@ func (s *Server) set(name string, value float64) error {
 		c.Up = up
 		c.Down = down
 		c.Revision += 1
-
-		s.changes.Add(name)
+	} else {
+		s.replicas[s.Config.Name][name] = &Counter{
+			Up:   up,
+			Down: down,
+		}
 	}
+
+	s.changes.Add(name)
 
 	return nil
 }
@@ -728,6 +735,25 @@ func (s *Server) handle(conn net.Conn) {
 					panic(err)
 				}
 			} else if err := p.Write("RET", []string{data}); err != nil {
+				panic(err)
+			}
+		case "MEMBERS":
+			members := s.memberlist.Members()
+
+			ret := make([]api.Member, 0, len(members))
+
+			for _, member := range members {
+				ret = append(ret, api.Member{
+					Name: member.Name,
+					Addr: member.Addr,
+				})
+			}
+
+			if data, err := json.Marshal(ret); err != nil {
+				if err := p.Error(err); err != nil {
+					panic(err)
+				}
+			} else if err := p.Write("RET", []string{string(data)}); err != nil {
 				panic(err)
 			}
 		default:

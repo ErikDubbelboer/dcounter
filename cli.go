@@ -61,5 +61,13 @@ func cli(arguments []string) {
 		} else {
 			fmt.Println(data)
 		}
+	} else if flags.Arg(0) == "members" {
+		if members, err := api.Members(); err != nil {
+			fmt.Println(err)
+		} else {
+			for _, member := range members {
+				fmt.Printf("%s\t%s\n", member.Addr, member.Name)
+			}
+		}
 	}
 }
