@@ -131,7 +131,7 @@ func init() {
 							log.Printf("[ERR] %v", err)
 						}
 					}
-				}(c.String("save"), c.Duration("interval"))
+				}(c.String("save"), c.Duration("save-interval"))
 			}
 
 			waitForSignal()

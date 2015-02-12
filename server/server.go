@@ -89,7 +89,7 @@ func (s *Server) readCounters(reader *bufio.Reader) error {
 		return err
 	}
 
-	s.logger.Printf("[DEBUG] reading %d counters", l)
+	//s.logger.Printf("[DEBUG] reading %d counters", l)
 
 	if l == 0 {
 		return nil
@@ -147,7 +147,7 @@ func (s *Server) readResets(reader *bufio.Reader) error {
 		return err
 	}
 
-	s.logger.Printf("[DEBUG] reading %d resets", jl)
+	//s.logger.Printf("[DEBUG] reading %d resets", jl)
 
 	for j := uint32(0); j < jl; j++ {
 		var name string
@@ -341,7 +341,7 @@ func (s *Server) GetBroadcasts(overhead, limit int) [][]byte {
 		s.changes.Pop()
 	}
 
-	s.logger.Printf("[DEBUG] %d byte broadcast", len(buffer))
+	//s.logger.Printf("[DEBUG] %d byte broadcast", len(buffer))
 
 	return [][]byte{buffer}
 }
