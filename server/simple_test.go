@@ -5,7 +5,7 @@ import (
 )
 
 func TestSimple(t *testing.T) {
-	//t.SkipNow()
+	t.Parallel()
 
 	s := NewTestServer(t, "s")
 
@@ -22,7 +22,7 @@ func TestSimple(t *testing.T) {
 }
 
 func TestSet(t *testing.T) {
-	//t.SkipNow()
+	t.Parallel()
 
 	s := NewTestServer(t, "s")
 
@@ -30,9 +30,7 @@ func TestSet(t *testing.T) {
 }
 
 func BenchmarkGet(b *testing.B) {
-	//b.SkipNow()
-
-	s := NewTestServer(b, "s")
+	s := NewTestServer(emptyBorT(0), "s")
 
 	b.ResetTimer()
 
@@ -42,9 +40,7 @@ func BenchmarkGet(b *testing.B) {
 }
 
 func BenchmarkInc(b *testing.B) {
-	//b.SkipNow()
-
-	s := NewTestServer(b, "s")
+	s := NewTestServer(emptyBorT(0), "s")
 
 	b.ResetTimer()
 
@@ -54,9 +50,7 @@ func BenchmarkInc(b *testing.B) {
 }
 
 func BenchmarkSet(b *testing.B) {
-	//b.SkipNow()
-
-	s := NewTestServer(b, "s")
+	s := NewTestServer(emptyBorT(0), "s")
 
 	b.ResetTimer()
 

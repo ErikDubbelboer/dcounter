@@ -94,9 +94,7 @@ func (a *App) Run(arguments []string) error {
 	// append help to commands
 	if a.Command(helpCommand.Name) == nil && !a.HideHelp {
 		a.Commands = append(a.Commands, helpCommand)
-		if (HelpFlag != BoolFlag{}) {
-			a.appendFlag(HelpFlag)
-		}
+		a.appendFlag(HelpFlag)
 	}
 
 	//append version/help flags
@@ -176,9 +174,7 @@ func (a *App) RunAsSubcommand(ctx *Context) error {
 	if len(a.Commands) > 0 {
 		if a.Command(helpCommand.Name) == nil && !a.HideHelp {
 			a.Commands = append(a.Commands, helpCommand)
-			if (HelpFlag != BoolFlag{}) {
-				a.appendFlag(HelpFlag)
-			}
+			a.appendFlag(HelpFlag)
 		}
 	}
 
@@ -242,7 +238,11 @@ func (a *App) RunAsSubcommand(ctx *Context) error {
 	}
 
 	// Run default Action
-	a.Action(context)
+	if len(a.Commands) > 0 {
+		a.Action(context)
+	} else {
+		a.Action(ctx)
+	}
 
 	return nil
 }

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -19,6 +20,23 @@ type BorT interface {
 	SkipNow()
 }
 
+type emptyBorT int
+
+func (e emptyBorT) Error(args ...interface{}) {
+}
+func (e emptyBorT) Errorf(format string, args ...interface{}) {
+}
+func (e emptyBorT) Fatal(args ...interface{}) {
+}
+func (e emptyBorT) Fatalf(format string, args ...interface{}) {
+}
+func (e emptyBorT) Log(args ...interface{}) {
+}
+func (e emptyBorT) Logf(format string, args ...interface{}) {
+}
+func (e emptyBorT) SkipNow() {
+}
+
 type TestServer struct {
 	client    string
 	advertise string
@@ -29,7 +47,7 @@ type TestServer struct {
 
 func NewTestServerOn(t BorT, name, bind, advertise string) *TestServer {
 	s := &TestServer{
-		client:    "127.0.0.1:" + strconv.FormatInt(1000+rand.Int63n(10000), 10),
+		client:    "127.0.0.1:" + strconv.FormatInt(1024+rand.Int63n(10000), 10),
 		advertise: advertise,
 		t:         t,
 	}
@@ -57,7 +75,7 @@ func NewTestServerOn(t BorT, name, bind, advertise string) *TestServer {
 }
 
 func NewTestServer(t BorT, name string) *TestServer {
-	bind := "127.0.0.1:" + strconv.FormatInt(1000+rand.Int63n(10000), 10)
+	bind := "127.0.0.1:" + strconv.FormatInt(1024+rand.Int63n(10000), 10)
 	return NewTestServerOn(t, name, bind, bind)
 }
 
@@ -98,7 +116,7 @@ func (s *TestServer) Get(name string, value float64, consistent bool) {
 func (s *TestServer) Inc(name string, diff float64) {
 	s.t.Logf("%s: inc %s %f", s.s.Config.Name, name, diff)
 
-	if err := s.a.Inc(name, diff); err != nil {
+	if _, err := s.a.Inc(name, diff); err != nil {
 		s.t.Error(err)
 	}
 }
@@ -106,7 +124,7 @@ func (s *TestServer) Inc(name string, diff float64) {
 func (s *TestServer) Set(name string, value float64) {
 	s.t.Logf("%s: set %s %f", s.s.Config.Name, name, value)
 
-	if err := s.a.Set(name, value); err != nil {
+	if _, err := s.a.Set(name, value); err != nil {
 		s.t.Error(err)
 	}
 }
@@ -125,4 +143,16 @@ func (s *TestServer) JoinOn(bind string) {
 	if err := s.a.Join([]string{bind}); err != nil {
 		s.t.Error(err)
 	}
+}
+
+func (s *TestServer) Save() Counters {
+	var counters Counters
+
+	if data, err := s.a.Save(); err != nil {
+		s.t.Error(err)
+	} else if err := json.Unmarshal([]byte(data), &counters); err != nil {
+		s.t.Error(err)
+	}
+
+	return counters
 }

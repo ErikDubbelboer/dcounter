@@ -1,12 +1,13 @@
 package server
 
 import (
+	"sync"
 	"testing"
 	"time"
 )
 
 func TestCluster(t *testing.T) {
-	//t.SkipNow()
+	t.Parallel()
 
 	a := NewTestServer(t, "a")
 	b := NewTestServer(t, "b")
@@ -25,8 +26,22 @@ func TestCluster(t *testing.T) {
 	time.Sleep(time.Second)
 	a.Get("test", 1, true)
 	b.Get("test", 1, true)
-	go a.Inc("test", -2)
-	go b.Inc("test", 4)
+
+	// the time.Sleep below should be enough prevent a race condition but the
+	// race detector doesn't have enough knowledge for this so use a waitgroup
+	// to prevent it from detecting a race condition here.
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		a.Inc("test", -2)
+		wg.Done()
+	}()
+	go func() {
+		b.Inc("test", 4)
+		wg.Done()
+	}()
+	wg.Wait()
+
 	time.Sleep(time.Second)
 	a.Get("test", 3, true)
 	b.Get("test", 3, true)
@@ -58,7 +73,7 @@ func TestCluster(t *testing.T) {
 }
 
 func TestNoJoin(t *testing.T) {
-	//t.SkipNow()
+	t.Parallel()
 
 	a := NewTestServer(t, "a")
 
@@ -69,10 +84,8 @@ func TestNoJoin(t *testing.T) {
 }
 
 func BenchmarkCluserInc(b *testing.B) {
-	//b.SkipNow()
-
-	a := NewTestServer(b, "a")
-	c := NewTestServer(b, "c")
+	a := NewTestServer(emptyBorT(0), "a")
+	c := NewTestServer(emptyBorT(0), "c")
 
 	b.ResetTimer()
 
@@ -81,5 +94,19 @@ func BenchmarkCluserInc(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		a.Inc("test", 1.2)
 		c.Inc("test", -1.2)
+	}
+}
+
+func BenchmarkCluserSet(b *testing.B) {
+	a := NewTestServer(emptyBorT(0), "a")
+	c := NewTestServer(emptyBorT(0), "c")
+
+	b.ResetTimer()
+
+	a.Join(c)
+
+	for i := 0; i < b.N; i++ {
+		a.Set("test", 0)
+		c.Inc("test", 1)
 	}
 }

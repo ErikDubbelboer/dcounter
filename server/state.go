@@ -1,6 +1,6 @@
 package server
 
-type State struct {
+type state struct {
 	Active byte
 	When   int64 // time.Now().Unix()
 }

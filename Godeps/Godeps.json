@@ -7,17 +7,17 @@
 			"Rev": "02a28a76dd20081bdd2a92133d467164450a926b"
 		},
 		{
+			"ImportPath": "github.com/atomx/memberlist",
+			"Rev": "b20e2d5d8448481e23e39dcaa5ac63ac83318f8f"
+		},
+		{
 			"ImportPath": "github.com/codegangsta/cli",
-			"Comment": "1.2.0-66-g6086d79",
-			"Rev": "6086d7927ec35315964d9fea46df6c04e6d697c1"
+			"Comment": "1.2.0-50-ga14c5b4",
+			"Rev": "a14c5b47c7efa4ff80cc42e1079a34b4756f2311"
 		},
 		{
 			"ImportPath": "github.com/hashicorp/go-msgpack/codec",
 			"Rev": "71c2886f5a673a35f909803f38ece5810165097b"
-		},
-		{
-			"ImportPath": "github.com/hashicorp/memberlist",
-			"Rev": "16d947e2d4b3f1fe508ee1d9b6ec34b8fd2e96d8"
 		},
 		{
 			"ImportPath": "github.com/ryanuber/columnize",

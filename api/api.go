@@ -20,8 +20,8 @@ type Member struct {
 type API interface {
 	Ping() error
 	Get(id string) (float64, bool, error)
-	Inc(id string, amount float64) error
-	Set(id string, value float64) error
+	Inc(id string, amount float64) (float64, error)
+	Set(id string, value float64) (float64, error)
 	List() (map[string]float64, error)
 	Join(hosts []string) error
 	Save() (string, error)
@@ -103,54 +103,62 @@ func (a *api) Get(id string) (float64, bool, error) {
 	return 0, true, err
 }
 
-func (a *api) Inc(id string, amount float64) error {
+func (a *api) Inc(id string, amount float64) (float64, error) {
 	var err error
 
 	for i := 0; i < 2; i++ {
 		if a.c == nil {
 			if err := a.connect(); err != nil {
-				return err
+				return 0, err
 			}
 		}
 
 		if err = a.p.Write("INC", []string{id, strconv.FormatFloat(amount, 'f', -1, 64)}); err != nil {
 			a.c = nil
 			continue
-		} else if cmd, _, err := a.p.Read(); err != nil {
-			return err
-		} else if cmd != "OK" {
-			return fmt.Errorf("OK expected")
+		} else if cmd, args, err := a.p.Read(); err != nil {
+			return 0, err
+		} else if cmd != "RET" {
+			return 0, fmt.Errorf("RET expected")
+		} else if len(args) != 1 {
+			return 0, fmt.Errorf("1 arguments expected")
+		} else if amount, err := strconv.ParseFloat(args[0], 64); err != nil {
+			return 0, err
 		} else {
-			return nil
+			return amount, nil
 		}
 	}
 
-	return err
+	return 0, err
 }
 
-func (a *api) Set(id string, value float64) error {
+func (a *api) Set(id string, value float64) (float64, error) {
 	var err error
 
 	for i := 0; i < 2; i++ {
 		if a.c == nil {
 			if err := a.connect(); err != nil {
-				return err
+				return 0, err
 			}
 		}
 
 		if err = a.p.Write("SET", []string{id, strconv.FormatFloat(value, 'f', -1, 64)}); err != nil {
 			a.c = nil
 			continue
-		} else if cmd, _, err := a.p.Read(); err != nil {
-			return err
-		} else if cmd != "OK" {
-			return fmt.Errorf("OK expected")
+		} else if cmd, args, err := a.p.Read(); err != nil {
+			return 0, err
+		} else if cmd != "RET" {
+			return 0, fmt.Errorf("RET expected")
+		} else if len(args) != 1 {
+			return 0, fmt.Errorf("1 arguments expected")
+		} else if amount, err := strconv.ParseFloat(args[0], 64); err != nil {
+			return 0, err
 		} else {
-			return nil
+			return amount, nil
 		}
 	}
 
-	return err
+	return 0, err
 }
 
 func (a *api) List() (map[string]float64, error) {

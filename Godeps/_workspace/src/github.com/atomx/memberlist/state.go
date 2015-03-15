@@ -128,7 +128,7 @@ func (m *Memberlist) pushPullTrigger(stop <-chan struct{}) {
 
 	// Tick using a dynamic timer
 	for {
-		tickTime := pushPullScale(interval, len(m.nodes))
+		tickTime := pushPullScale(interval, m.estNumNodes())
 		select {
 		case <-time.After(tickTime):
 			m.pushPull()
@@ -218,6 +218,7 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	m.setAckChannel(ping.SeqNo, ackCh, m.config.ProbeInterval)
 
 	// Send the ping message
+	sent := time.Now()
 	if err := m.encodeAndSendMsg(destAddr, pingMsg, &ping); err != nil {
 		m.logger.Printf("[ERR] memberlist: Failed to send ping: %s", err)
 		return
@@ -227,6 +228,9 @@ func (m *Memberlist) probeNode(node *nodeState) {
 	select {
 	case v := <-ackCh:
 		if v == true {
+			if m.config.RTT != nil {
+				m.config.RTT.NotifyRTT(&node.Node, time.Now().Sub(sent))
+			}
 			return
 		}
 
@@ -285,6 +289,9 @@ func (m *Memberlist) resetNodes() {
 	// Trim the nodes to exclude the dead nodes
 	m.nodes = m.nodes[0:deadIdx]
 
+	// Update numNodes after we've trimmed the dead nodes
+	atomic.StoreUint32(&m.numNodes, uint32(deadIdx))
+
 	// Shuffle live nodes
 	shuffleNodes(m.nodes)
 }
@@ -318,7 +325,7 @@ func (m *Memberlist) gossip() {
 
 		// Send the compound message
 		destAddr := &net.UDPAddr{IP: node.Addr, Port: int(node.Port)}
-		if err := m.rawSendMsg(destAddr, compound.Bytes()); err != nil {
+		if err := m.rawSendMsgUDP(destAddr, compound.Bytes()); err != nil {
 			m.logger.Printf("[ERR] memberlist: Failed to send gossip to %s: %s", destAddr, err)
 		}
 	}
@@ -357,17 +364,11 @@ func (m *Memberlist) pushPullNode(addr []byte, port uint16, join bool) error {
 		return err
 	}
 
-	if err := m.verifyProtocol(remote); err != nil {
+	if err := m.mergeRemoteState(join, remote, userState); err != nil {
+		m.logger.Printf("[ERR] memberlist: Failed to merge remote state: %s", err)
 		return err
 	}
 
-	// Merge the state
-	m.mergeState(remote)
-
-	// Invoke the delegate
-	if m.config.Delegate != nil {
-		m.config.Delegate.MergeRemoteState(userState, join)
-	}
 	return nil
 }
 
@@ -500,6 +501,11 @@ func (m *Memberlist) nextIncarnation() uint32 {
 	return atomic.AddUint32(&m.incarnation, 1)
 }
 
+// estNumNodes is used to get the current estimate of the number of nodes
+func (m *Memberlist) estNumNodes() int {
+	return int(atomic.LoadUint32(&m.numNodes))
+}
+
 // setAckChannel is used to attach a channel to receive a message when
 // an ack with a given sequence number is received. The channel gets sent
 // false on timeout
@@ -602,6 +608,9 @@ func (m *Memberlist) aliveNode(a *alive, notify chan struct{}, bootstrap bool) {
 		// Add at the end and swap with the node at the offset
 		m.nodes = append(m.nodes, state)
 		m.nodes[offset], m.nodes[n] = m.nodes[n], m.nodes[offset]
+
+		// Update numNodes after we've added a new node
+		atomic.AddUint32(&m.numNodes, 1)
 	}
 
 	// Check if this address is different than the existing node
@@ -774,7 +783,7 @@ func (m *Memberlist) suspectNode(s *suspect) {
 	state.StateChange = changeTime
 
 	// Setup a timeout for this
-	timeout := suspicionTimeout(m.config.SuspicionMult, len(m.nodes), m.config.ProbeInterval)
+	timeout := suspicionTimeout(m.config.SuspicionMult, m.estNumNodes(), m.config.ProbeInterval)
 	time.AfterFunc(timeout, func() {
 		m.nodeLock.Lock()
 		state, ok := m.nodeMap[s.Node]

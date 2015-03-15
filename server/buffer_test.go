@@ -5,7 +5,7 @@ import (
 )
 
 func TestBuffer(t *testing.T) {
-	buffer := make(Buffer, 0, 2)
+	buffer := make(buffer, 0, 2)
 
 	if n, err := buffer.Write([]byte{1}); err != nil {
 		t.Error(err)

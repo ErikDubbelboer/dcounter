@@ -1,3 +1,6 @@
+// +build !race
+// testproxy contains races when calling New and Timeout or Stop too quickly.
+
 package server
 
 import (
@@ -8,8 +11,9 @@ import (
 )
 
 func TestNetwork(t *testing.T) {
-	// For this test to work you need to change the reconnect retry timeout in server.go:reconnect
-	t.SkipNow()
+	if testing.Short() {
+		t.SkipNow()
+	}
 
 	tcpa := testproxy.NewTCP(t, "127.0.0.1:3001", "127.0.0.1:2001")
 	udpa := testproxy.NewUDP(t, "127.0.0.1:3001", "127.0.0.1:2001")
@@ -36,7 +40,7 @@ func TestNetwork(t *testing.T) {
 	udpb.Timeout(d)
 	time.Sleep(d + time.Second)
 	t.Log("done, waiting for reconnect")
-	time.Sleep(time.Second * 5)
+	time.Sleep(time.Second * 16)
 	t.Log("should be reconnected now")
 
 	a.Inc("test", 1)

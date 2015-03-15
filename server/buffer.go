@@ -4,9 +4,9 @@ import (
 	"io"
 )
 
-type Buffer []byte
+type buffer []byte
 
-func (b *Buffer) Write(p []byte) (int, error) {
+func (b *buffer) Write(p []byte) (int, error) {
 	lb := len(*b)
 	lp := len(p)
 
