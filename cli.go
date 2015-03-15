@@ -35,7 +35,7 @@ func init() {
 					}
 					defer api.Close()
 
-					amount, consistent, err := api.Get(c.Args().Get(0))
+					value, consistent, err := api.Get(c.Args().Get(0))
 					if err != nil {
 						log.Printf("[ERR] %v", err)
 					} else {
@@ -44,7 +44,7 @@ func init() {
 							state = "INCONSISTENT"
 						}
 
-						fmt.Printf("%f (%s)\n", amount, state)
+						fmt.Printf("%f (%s)\n", value, state)
 					}
 				},
 			},
@@ -60,12 +60,12 @@ func init() {
 					}
 					defer api.Close()
 
-					if amount, err := strconv.ParseFloat(c.Args().Get(1), 64); err != nil {
+					if diff, err := strconv.ParseFloat(c.Args().Get(1), 64); err != nil {
 						fmt.Println(err)
-					} else if err := api.Inc(c.Args().Get(0), amount); err != nil {
+					} else if value, err := api.Inc(c.Args().Get(0), diff); err != nil {
 						fmt.Println(err)
 					} else {
-						fmt.Println("OK")
+						fmt.Printf("%f", value)
 					}
 				},
 			},
@@ -81,12 +81,12 @@ func init() {
 					}
 					defer api.Close()
 
-					if amount, err := strconv.ParseFloat(c.Args().Get(1), 64); err != nil {
+					if value, err := strconv.ParseFloat(c.Args().Get(1), 64); err != nil {
 						fmt.Println(err)
-					} else if err := api.Set(c.Args().Get(0), amount); err != nil {
+					} else if old, err := api.Set(c.Args().Get(0), value); err != nil {
 						fmt.Println(err)
 					} else {
-						fmt.Println("OK")
+						fmt.Println("%f (%f)", value, old)
 					}
 				},
 			},

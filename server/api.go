@@ -62,7 +62,7 @@ func (s *Server) get(name string) (float64, bool) {
 	return value, s.consistent
 }
 
-func (s *Server) inc(name string, diff float64) (old float64, err error) {
+func (s *Server) inc(name string, diff float64) (value float64, err error) {
 	s.l.Lock()
 	defer s.l.Unlock()
 
@@ -70,8 +70,6 @@ func (s *Server) inc(name string, diff float64) (old float64, err error) {
 	if !ok {
 		c = &Counter{}
 		s.replicas[s.Config.Name][name] = c
-	} else {
-		old = c.Up - c.Down
 	}
 
 	if diff > 0 {
@@ -80,7 +78,7 @@ func (s *Server) inc(name string, diff float64) (old float64, err error) {
 		c.Down -= diff // diff is negative so -= adds it.
 	}
 
-	return old, s.broadcastChange(name, c)
+	return c.Up - c.Down, s.broadcastChange(name, c)
 }
 
 func (s *Server) set(name string, value float64) (old float64, err error) {
