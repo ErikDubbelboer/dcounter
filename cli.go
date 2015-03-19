@@ -61,11 +61,11 @@ func init() {
 					defer api.Close()
 
 					if diff, err := strconv.ParseFloat(c.Args().Get(1), 64); err != nil {
-						fmt.Println(err)
+						log.Printf("[ERR] %v", err)
 					} else if value, err := api.Inc(c.Args().Get(0), diff); err != nil {
-						fmt.Println(err)
+						log.Printf("[ERR] %v", err)
 					} else {
-						fmt.Printf("%f", value)
+						fmt.Printf("%f\n", value)
 					}
 				},
 			},
@@ -82,11 +82,11 @@ func init() {
 					defer api.Close()
 
 					if value, err := strconv.ParseFloat(c.Args().Get(1), 64); err != nil {
-						fmt.Println(err)
+						log.Printf("[ERR] %v", err)
 					} else if old, err := api.Set(c.Args().Get(0), value); err != nil {
-						fmt.Println(err)
+						log.Printf("[ERR] %v", err)
 					} else {
-						fmt.Println("%f (%f)", value, old)
+						fmt.Printf("%f (%f)\n", value, old)
 					}
 				},
 			},
@@ -126,7 +126,7 @@ func init() {
 					if err := api.Join(c.Args()); err != nil {
 						log.Printf("[ERR] %v", err)
 					} else {
-						fmt.Println("OK")
+						fmt.Printf("OK\n")
 					}
 				},
 			},

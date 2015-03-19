@@ -111,36 +111,28 @@ func (s *Server) set(name string, value float64) (old float64, err error) {
 			continue
 		}
 
-		if err := func() error {
-			s.l.RLock()
-			defer s.l.RUnlock()
+		s.l.RLock()
 
-			counters, ok := s.replicas[node.Name]
-			if !ok {
-				return nil
-			}
+		counters, ok := s.replicas[node.Name]
+		if !ok {
+			s.l.RUnlock()
+			continue
+		}
 
-			counter, ok := counters[name]
-			if !ok {
-				return nil
-			}
+		counter, ok := counters[name]
+		if !ok {
+			s.l.RUnlock()
+			continue
+		}
 
-			buffer.Truncate(bl)
+		buffer.Truncate(bl)
 
-			s.logger.Printf("[DEBUG] write %v", counter)
-
-			if err := binary.Write(writer, binary.LittleEndian, counter); err != nil {
-				return err
-			}
-
-			return nil
-		}(); err != nil {
+		if err := binary.Write(&buffer, binary.LittleEndian, counter); err != nil {
+			s.l.RUnlock()
 			return 0, err
 		}
 
-		if err := writer.Flush(); err != nil {
-			return 0, err
-		}
+		s.l.RUnlock()
 
 		if err := s.memberlist.SendToTCP(node, buffer.Bytes()); err != nil {
 			return 0, err
