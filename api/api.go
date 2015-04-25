@@ -63,7 +63,8 @@ func (a *api) Ping() error {
 			a.c = nil
 			continue
 		} else if cmd, _, err := a.p.Read(); err != nil {
-			return err
+			a.c = nil
+			continue
 		} else if cmd != "PONG" {
 			return fmt.Errorf("PONG expected")
 		}
@@ -86,7 +87,8 @@ func (a *api) Get(id string) (float64, bool, error) {
 			a.c = nil
 			continue
 		} else if cmd, args, err := a.p.Read(); err != nil {
-			return 0, false, err
+			a.c = nil
+			continue
 		} else if cmd != "RET" {
 			return 0, false, fmt.Errorf("RET expected")
 		} else if len(args) != 2 {
@@ -117,7 +119,8 @@ func (a *api) Inc(id string, diff float64) (float64, error) {
 			a.c = nil
 			continue
 		} else if cmd, args, err := a.p.Read(); err != nil {
-			return 0, err
+			a.c = nil
+			continue
 		} else if cmd != "RET" {
 			return 0, fmt.Errorf("RET expected")
 		} else if len(args) != 1 {
@@ -146,7 +149,8 @@ func (a *api) Set(id string, value float64) (float64, error) {
 			a.c = nil
 			continue
 		} else if cmd, args, err := a.p.Read(); err != nil {
-			return 0, err
+			a.c = nil
+			continue
 		} else if cmd != "RET" {
 			return 0, fmt.Errorf("RET expected")
 		} else if len(args) != 1 {
@@ -175,7 +179,8 @@ func (a *api) List() (map[string]float64, error) {
 			a.c = nil
 			continue
 		} else if cmd, args, err := a.p.Read(); err != nil {
-			return nil, err
+			a.c = nil
+			continue
 		} else if cmd != "RET" {
 			return nil, fmt.Errorf("RET expected")
 		} else {
@@ -210,7 +215,8 @@ func (a *api) Join(hosts []string) error {
 			a.c = nil
 			continue
 		} else if cmd, _, err := a.p.Read(); err != nil {
-			return err
+			a.c = nil
+			continue
 		} else if cmd != "OK" {
 			return fmt.Errorf("OK expected")
 		} else {
@@ -235,7 +241,8 @@ func (a *api) Save() (string, error) {
 			a.c = nil
 			continue
 		} else if cmd, args, err := a.p.Read(); err != nil {
-			return "", err
+			a.c = nil
+			continue
 		} else if cmd != "RET" {
 			return "", fmt.Errorf("RET expected")
 		} else {
@@ -262,7 +269,8 @@ func (a *api) Members() ([]Member, error) {
 			a.c = nil
 			continue
 		} else if cmd, args, err := a.p.Read(); err != nil {
-			return nil, err
+			a.c = nil
+			continue
 		} else if cmd != "RET" {
 			return nil, fmt.Errorf("RET expected")
 		} else if err := json.Unmarshal([]byte(args[0]), &members); err != nil {
