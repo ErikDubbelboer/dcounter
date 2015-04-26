@@ -1,19 +1,19 @@
 {
 	"ImportPath": "github.com/atomx/dcounter",
-	"GoVersion": "go1.4.1",
+	"GoVersion": "go1.4.2",
 	"Deps": [
 		{
 			"ImportPath": "github.com/armon/go-metrics",
-			"Rev": "02a28a76dd20081bdd2a92133d467164450a926b"
+			"Rev": "a54701ebec11868993bc198c3f315353e9de2ed6"
 		},
 		{
 			"ImportPath": "github.com/atomx/memberlist",
-			"Rev": "b20e2d5d8448481e23e39dcaa5ac63ac83318f8f"
+			"Rev": "49a46258cad56c4c578af9b3012d83bde553aa2a"
 		},
 		{
 			"ImportPath": "github.com/codegangsta/cli",
-			"Comment": "1.2.0-87-g8ce64f1",
-			"Rev": "8ce64f19ff08029a69d11b7615c9b591245450ad"
+			"Comment": "1.2.0-98-g30b361b",
+			"Rev": "30b361bf66a60174a9589458afbf494478bafd00"
 		},
 		{
 			"ImportPath": "github.com/hashicorp/go-msgpack/codec",

@@ -43,9 +43,14 @@ func (s *Server) GetBroadcasts(overhead, limit int) [][]byte {
 	s.l.RLock()
 	defer s.l.RUnlock()
 
+	s.logger.Printf("[DEBUG] %d messages queued", s.changes.NumQueued())
+
 	return s.changes.GetBroadcasts(overhead, limit)
 }
 
+// LocalState is called when memberlist wants to do a full TCP
+// state transfer to one random node.
+// Since it's only one random node we shouldn't reset s.changes here.
 func (s *Server) LocalState(join bool) []byte {
 	buffer := bytes.Buffer{}
 	enc := gob.NewEncoder(&buffer)
