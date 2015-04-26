@@ -1,5 +1,10 @@
 # dcounter
-[![Build Status](https://travis-ci.org/atomx/dcounter.svg?branch=master)](https://travis-ci.org/atomx/dcounter) [![GoDoc](https://godoc.org/github.com/atomx/dcounter/api?status.png)](https://godoc.org/github.com/atomx/dcounter/api)
+
+[![Build Status](https://travis-ci.org/atomx/dcounter.svg?branch=master)](https://travis-ci.org/atomx/dcounter)
+
+### api [![GoDoc](https://godoc.org/github.com/atomx/dcounter/api?status.png)](https://godoc.org/github.com/atomx/dcounter/api)
+### pool [![GoDoc](https://godoc.org/github.com/atomx/dcounter/pool?status.png)](https://godoc.org/github.com/atomx/dcounter/pool)
+### server [![GoDoc](https://godoc.org/github.com/atomx/dcounter/server?status.png)](https://godoc.org/github.com/atomx/dcounter/server)
 
 ## Installation 
 

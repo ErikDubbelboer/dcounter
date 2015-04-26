@@ -47,7 +47,7 @@ type TestServer struct {
 
 func NewTestServerOn(t BorT, name, bind, advertise string) *TestServer {
 	s := &TestServer{
-		client:    "127.0.0.1:" + strconv.FormatInt(1024+rand.Int63n(10000), 10),
+		client:    "localhost:" + strconv.FormatInt(1024+rand.Int63n(10000), 10),
 		advertise: advertise,
 		t:         t,
 	}
@@ -66,16 +66,16 @@ func NewTestServerOn(t BorT, name, bind, advertise string) *TestServer {
 		t.Fatal(err)
 	}
 
-	s.a, err = dcounter.Dial("tcp", s.client)
-	if err != nil {
-		s.t.Fatal(err)
-	}
+	// Give the server some time to start listening for connections.
+	time.Sleep(time.Second)
+
+	s.a = dcounter.New("tcp", s.client)
 
 	return s
 }
 
 func NewTestServer(t BorT, name string) *TestServer {
-	bind := "127.0.0.1:" + strconv.FormatInt(1024+rand.Int63n(10000), 10)
+	bind := "localhost:" + strconv.FormatInt(1024+rand.Int63n(10000), 10)
 	return NewTestServerOn(t, name, bind, bind)
 }
 

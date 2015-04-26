@@ -1,14 +1,18 @@
 package main
 
 import (
+	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/atomx/dcounter/server"
+	"github.com/atomx/syslog"
 	"github.com/codegangsta/cli"
 )
 
@@ -75,12 +79,43 @@ func init() {
 				Value: time.Minute,
 				Usage: "Persist data this often.",
 			},
+			cli.StringFlag{
+				Name:  "pidfile, p",
+				Value: "",
+				Usage: "Create a pidfile at this path.",
+			},
+			cli.StringFlag{
+				Name:  "syslog",
+				Value: "",
+				Usage: "Log to syslog, protocol:address, for example udp:localhost:514",
+			},
 		},
 		Action: func(c *cli.Context) {
+			var logWriter io.Writer = os.Stderr
+
+			if c.String("syslog") != "" {
+				parts := strings.SplitN(c.String("syslog"), ":", 2)
+
+				if len(parts) != 2 {
+					log.Printf("[ERR] invalid --syslog, expected network:addr")
+				}
+
+				logWriter = syslog.New(parts[0], parts[1], "dcounter")
+				log.SetOutput(logWriter)
+			}
+
+			if c.String("pidfile") != "" {
+				if err := ioutil.WriteFile(c.String("pidfile"), []byte(strconv.FormatInt(int64(os.Getpid()), 10)), 0666); err != nil {
+					log.Printf("[ERR] %v", err)
+					return
+				}
+				defer os.Remove(c.String("pidfile"))
+			}
+
 			join := c.StringSlice("join")
 
 			if len(join) > 0 && c.String("load") != "" {
-				log.Printf("And not use --load and --join at the same time")
+				log.Printf("[ERR] Can not use --load and --join at the same time")
 				return
 			}
 
@@ -95,6 +130,8 @@ func init() {
 				log.Printf("[ERR] %v", err)
 				return
 			}
+
+			s.Config.LogOutput = logWriter
 
 			if err := s.Start(); err != nil {
 				log.Printf("[ERR] %v", err)
@@ -135,6 +172,8 @@ func init() {
 			}
 
 			waitForSignal()
+
+			// After this the defer from above will stop the server gracefully.
 		},
 	})
 }

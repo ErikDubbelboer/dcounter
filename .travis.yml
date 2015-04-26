@@ -4,8 +4,10 @@ go:
   - 1.4
   - tip
 
+env: GOMAXPROCS=4
+
 before_install: go get golang.org/x/tools/cmd/cover
-script: go test -cover ./...
+script: go test -v -short -cover ./...
 
 notifications:
   email: false

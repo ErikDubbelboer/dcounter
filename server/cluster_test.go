@@ -7,8 +7,6 @@ import (
 )
 
 func TestCluster(t *testing.T) {
-	t.Parallel()
-
 	a := NewTestServer(t, "a")
 	b := NewTestServer(t, "b")
 
@@ -73,11 +71,9 @@ func TestCluster(t *testing.T) {
 }
 
 func TestNoJoin(t *testing.T) {
-	t.Parallel()
-
 	a := NewTestServer(t, "a")
 
-	a.a.Join([]string{"127.0.0.1:19727"})
+	a.a.Join([]string{"localhost:19727"})
 	time.Sleep(time.Second)
 
 	a.Get("test", 0, false)

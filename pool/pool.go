@@ -7,6 +7,7 @@ import (
 	api "github.com/atomx/dcounter/api"
 )
 
+// Pool implements a simple blocking connection pool.
 type Pool chan api.API
 
 // Get gets a connection from the pool.

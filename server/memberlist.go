@@ -43,7 +43,9 @@ func (s *Server) GetBroadcasts(overhead, limit int) [][]byte {
 	s.l.RLock()
 	defer s.l.RUnlock()
 
-	s.logger.Printf("[DEBUG] %d messages queued", s.changes.NumQueued())
+	if queued := s.changes.NumQueued(); queued > 0 {
+		s.logger.Printf("[DEBUG] %d messages queued", queued)
+	}
 
 	return s.changes.GetBroadcasts(overhead, limit)
 }

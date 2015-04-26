@@ -17,15 +17,42 @@ type Member struct {
 // API is the interface returned by New and Dial.
 // This is an interface so you can easily mock this interface
 // in your tests.
+// API is NOT goroutine safe!
 type API interface {
+	// Ping pings the server and returns nil if everything is ok.
 	Ping() error
+
+	// Get returns the value of the counter,
+	// a bool indicating if the cluster is stable.
 	Get(id string) (float64, bool, error)
+
+	// Inc increments or decrements (diff is negative) a counter.
+	// The new value is returned.
 	Inc(id string, diff float64) (float64, error)
+
+	// Set sets the value of a counter.
+	// Set is a heavy operation as it propagates using TCP.
+	// Set returns once the value is propagated to all servers.
+	// If set returns an error the change might have already been
+	// propagated to some servers.
+	// Set returns the old value.
 	Set(id string, value float64) (float64, error)
+
+	// List returns a map with all counters.
 	List() (map[string]float64, error)
+
+	// Join discards all data in the server and joines a cluster.
 	Join(hosts []string) error
+
+	// Save returns a json string containing the data for this server.
+	// The json can be saved to a file and loaded using --load when starting a server.
 	Save() (string, error)
+
+	// Members returns a list of members of the current cluster.
 	Members() ([]Member, error)
+
+	// Close closes any open connection.
+	// After close any function will just reopen the connection.
 	Close() error
 }
 

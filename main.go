@@ -3,15 +3,14 @@ package main
 import (
 	"os"
 
+	"github.com/atomx/dcounter/server"
 	"github.com/codegangsta/cli"
 )
-
-const VERSION = "0.2.0"
 
 var app = &cli.App{
 	Name:         "dcounter",
 	Usage:        "high performance, eventually consisten, distributed counters.",
-	Version:      VERSION,
+	Version:      server.VERSION,
 	BashComplete: cli.DefaultAppComplete,
 	Author:       "Erik Dubbelboer",
 	Email:        "erik@dubbelboer.com",

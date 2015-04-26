@@ -10,20 +10,23 @@ import (
 	"github.com/atomx/dcounter/testproxy"
 )
 
-func TestNetwork(t *testing.T) {
+// This test is a bit flaky on TravisCI.
+func TestNetworkFail(t *testing.T) {
 	if testing.Short() {
 		t.SkipNow()
 	}
 
-	tcpa := testproxy.NewTCP(t, "127.0.0.1:3001", "127.0.0.1:2001")
-	udpa := testproxy.NewUDP(t, "127.0.0.1:3001", "127.0.0.1:2001")
-	tcpb := testproxy.NewTCP(t, "127.0.0.1:3002", "127.0.0.1:2002")
-	udpb := testproxy.NewUDP(t, "127.0.0.1:3002", "127.0.0.1:2002")
+	tcpa := testproxy.NewTCP(t, "localhost:3001", "localhost:2001")
+	udpa := testproxy.NewUDP(t, "localhost:3001", "localhost:2001")
+	tcpb := testproxy.NewTCP(t, "localhost:3002", "localhost:2002")
+	udpb := testproxy.NewUDP(t, "localhost:3002", "localhost:2002")
 
-	a := NewTestServerOn(t, "a", "127.0.0.1:2001", "127.0.0.1:3001")
-	b := NewTestServerOn(t, "b", "127.0.0.1:2002", "127.0.0.1:3002")
+	a := NewTestServerOn(t, "a", "localhost:2001", "localhost:3001")
+	time.Sleep(time.Second)
+	b := NewTestServerOn(t, "b", "localhost:2002", "localhost:3002")
+	time.Sleep(time.Second)
 
-	a.JoinOn("127.0.0.1:3002")
+	a.JoinOn("localhost:3002")
 	time.Sleep(time.Second)
 
 	a.Inc("test", 1)

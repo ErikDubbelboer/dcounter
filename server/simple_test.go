@@ -5,8 +5,6 @@ import (
 )
 
 func TestSimple(t *testing.T) {
-	t.Parallel()
-
 	s := NewTestServer(t, "s")
 
 	s.Get("test", 0, true)
@@ -22,8 +20,6 @@ func TestSimple(t *testing.T) {
 }
 
 func TestSet(t *testing.T) {
-	t.Parallel()
-
 	s := NewTestServer(t, "s")
 
 	s.Set("test", 0)

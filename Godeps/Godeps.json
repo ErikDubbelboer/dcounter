@@ -11,6 +11,10 @@
 			"Rev": "49a46258cad56c4c578af9b3012d83bde553aa2a"
 		},
 		{
+			"ImportPath": "github.com/atomx/syslog",
+			"Rev": "c219524b11e068fdf9ae4afd529a93a22b21c98d"
+		},
+		{
 			"ImportPath": "github.com/codegangsta/cli",
 			"Comment": "1.2.0-98-g30b361b",
 			"Rev": "30b361bf66a60174a9589458afbf494478bafd00"

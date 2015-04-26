@@ -2,15 +2,9 @@ package server
 
 import (
 	"net"
-	"net/http"
-	_ "net/http/pprof"
 	"strconv"
 	"strings"
 )
-
-func init() {
-	go http.ListenAndServe(":12347", nil)
-}
 
 func min(a, b int) int {
 	if a <= b {

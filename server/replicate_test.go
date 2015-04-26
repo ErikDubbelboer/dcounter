@@ -6,8 +6,6 @@ import (
 )
 
 func TestReplicate(t *testing.T) {
-	t.Parallel()
-
 	a := NewTestServer(t, "a")
 	b := NewTestServer(t, "b")
 
