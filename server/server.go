@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/atomx/memberlist"
+	"github.com/hashicorp/memberlist"
 )
 
 const (

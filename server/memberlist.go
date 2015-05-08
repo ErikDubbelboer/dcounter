@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/atomx/memberlist"
+	"github.com/hashicorp/memberlist"
 )
 
 func (s *Server) NodeMeta(limit int) []byte {

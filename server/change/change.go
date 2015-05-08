@@ -1,7 +1,7 @@
 package change
 
 import (
-	"github.com/atomx/memberlist"
+	"github.com/hashicorp/memberlist"
 )
 
 type Change struct {
