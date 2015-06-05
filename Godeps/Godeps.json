@@ -4,7 +4,7 @@
 	"Deps": [
 		{
 			"ImportPath": "github.com/armon/go-metrics",
-			"Rev": "a54701ebec11868993bc198c3f315353e9de2ed6"
+			"Rev": "b2d95e5291cdbc26997d1301a5e467ecbb240e25"
 		},
 		{
 			"ImportPath": "github.com/atomx/syslog",
@@ -17,11 +17,11 @@
 		},
 		{
 			"ImportPath": "github.com/hashicorp/go-msgpack/codec",
-			"Rev": "71c2886f5a673a35f909803f38ece5810165097b"
+			"Rev": "fa3f63826f7c23912c15263591e65d54d080b458"
 		},
 		{
 			"ImportPath": "github.com/hashicorp/memberlist",
-			"Rev": "6025015f2dc659ca2c735112d37e753bda6e329d"
+			"Rev": "c0dd21a51b7f6af4ecb9e1c954bc83b2aa0fd2d8"
 		},
 		{
 			"ImportPath": "github.com/ryanuber/columnize",
