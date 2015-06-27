@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"io"
 	"io/ioutil"
 	"log"
@@ -11,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/armon/go-metrics"
 	"github.com/atomx/dcounter/server"
 	"github.com/atomx/syslog"
 	"github.com/codegangsta/cli"
@@ -89,6 +91,26 @@ func init() {
 				Value: "",
 				Usage: "Log to syslog, protocol:address, for example udp:localhost:514",
 			},
+			cli.DurationFlag{
+				Name:  "sync-interval",
+				Value: time.Second * 10,
+				Usage: "Interval between full state syncs between random nodes",
+			},
+			cli.DurationFlag{
+				Name:  "update-interval",
+				Value: time.Millisecond * 100,
+				Usage: "Interval between partial update <update-nodes> random nodes",
+			},
+			cli.IntFlag{
+				Name:  "update-nodes",
+				Value: 2,
+				Usage: "Number of random nodes to do partial updates to",
+			},
+			cli.StringFlag{
+				Name:  "key",
+				Value: "",
+				Usage: "Encryption key to use. Base64 encoded AES key, either 16, 24, or 32 bytes to select AES-128, AES-192, or AES-256",
+			},
 		},
 		Action: func(c *cli.Context) {
 			var logWriter io.Writer = os.Stderr
@@ -132,6 +154,23 @@ func init() {
 			}
 
 			s.Config.LogOutput = logWriter
+
+			s.Config.PushPullInterval = c.Duration("sync-interval")
+			s.Config.GossipInterval = c.Duration("update-interval")
+			s.Config.GossipNodes = c.Int("update-nodes")
+
+			if c.String("key") != "" {
+				s.Config.SecretKey, err = base64.StdEncoding.DecodeString(c.String("key"))
+				if err != nil {
+					log.Printf("[ERR] %v", err)
+					return
+				}
+			}
+
+			inm := metrics.NewInmemSink(time.Second, time.Minute)
+			sig := metrics.DefaultInmemSignal(inm)
+			defer sig.Stop()
+			metrics.NewGlobal(metrics.DefaultConfig("dcounter"), inm)
 
 			if err := s.Start(); err != nil {
 				log.Printf("[ERR] %v", err)

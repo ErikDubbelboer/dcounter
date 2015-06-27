@@ -12,8 +12,8 @@
 		},
 		{
 			"ImportPath": "github.com/codegangsta/cli",
-			"Comment": "1.2.0-106-ga889873",
-			"Rev": "a889873af50a499d060097216dcdbcc26ed09e7c"
+			"Comment": "1.2.0-127-gad48024",
+			"Rev": "ad480243a8a6cda30acf7cd999ea3e5142154fde"
 		},
 		{
 			"ImportPath": "github.com/hashicorp/go-msgpack/codec",
@@ -21,7 +21,7 @@
 		},
 		{
 			"ImportPath": "github.com/hashicorp/memberlist",
-			"Rev": "c0dd21a51b7f6af4ecb9e1c954bc83b2aa0fd2d8"
+			"Rev": "4fe75bc33bdf199d6941e6ecf85b67ce32c1ce6d"
 		},
 		{
 			"ImportPath": "github.com/ryanuber/columnize",

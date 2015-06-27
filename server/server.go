@@ -339,10 +339,11 @@ func New(name, bind, advertise, client string) (*Server, error) {
 	s.Config.Name = name
 
 	s.Config.SuspicionMult = 2
-	s.Config.PushPullInterval = 60 * time.Second
 	s.Config.ProbeInterval = 2 * time.Second
 	s.Config.ProbeTimeout = 4 * time.Second
-	s.Config.GossipNodes = 4
+
+	s.Config.GossipNodes = 2
+	s.Config.PushPullInterval = 60 * time.Second
 	s.Config.GossipInterval = 500 * time.Millisecond
 
 	ip, port, err := splitHostPort(bind, 9373)
