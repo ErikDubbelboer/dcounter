@@ -310,13 +310,15 @@ func (a *api) Members() ([]Member, error) {
 	return nil, err
 }
 
-func (a *api) Close() error {
-	err := a.c.Close()
+func (a *api) Close() (err error) {
+	if a.c != nil {
+		err = a.c.Close()
+	}
 
 	a.c = nil
 	a.p = nil
 
-	return err
+	return
 }
 
 // New returns a new API client but does not connect.

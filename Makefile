@@ -1,6 +1,12 @@
 
+all: dcounter
+
+.PHONY: all
+
+
 dcounter:
 	go build
+
 
 install: dcounter
 	mkdir -p /var/lib/dcounter/ 

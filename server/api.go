@@ -81,7 +81,7 @@ func (s *Server) inc(name string, diff float64) (value float64, err error) {
 	return c.Up - c.Down, s.broadcastChange(name, c)
 }
 
-func (s *Server) set(name string, value float64) (old float64, err error) {
+func (s *Server) set(name string, value float64) (old float64, errs Errors) {
 	var up, down float64
 
 	if value > 0 {
@@ -96,15 +96,17 @@ func (s *Server) set(name string, value float64) (old float64, err error) {
 	buffer.WriteByte(resetMessage)
 
 	if _, err := writer.WriteString(name + "\n"); err != nil {
-		return 0, err
+		return 0, Errors{err}
 	}
 
 	if err := writer.Flush(); err != nil {
-		return 0, err
+		return 0, Errors{err}
 	}
 
 	bl := buffer.Len()
 	nodes := s.memberlist.Members()
+
+	errs = make([]error, 0)
 
 	for _, node := range nodes {
 		if node.Name == s.Config.Name {
@@ -129,14 +131,20 @@ func (s *Server) set(name string, value float64) (old float64, err error) {
 
 		if err := binary.Write(&buffer, binary.LittleEndian, counter); err != nil {
 			s.l.RUnlock()
-			return 0, err
+			errs = append(errs, err)
+			continue
 		}
 
 		s.l.RUnlock()
 
 		if err := s.memberlist.SendToTCP(node, buffer.Bytes()); err != nil {
-			return 0, err
+			errs = append(errs, err)
+			continue
 		}
+	}
+
+	if errs.Len() > 0 {
+		return 0, errs
 	}
 
 	s.l.Lock()
@@ -157,7 +165,7 @@ func (s *Server) set(name string, value float64) (old float64, err error) {
 		s.replicas[s.Config.Name][name] = c
 	}
 
-	return old, s.broadcastChange(name, c)
+	return old, Errors{s.broadcastChange(name, c)}
 }
 
 func (s *Server) list() map[string]float64 {
@@ -266,8 +274,8 @@ func (s *Server) handle(conn net.Conn) {
 				if err := p.Error(err); err != nil {
 					panic(err)
 				}
-			} else if amount, err := s.set(args[0], value); err != nil {
-				if err := p.Error(err); err != nil {
+			} else if amount, errs := s.set(args[0], value); errs.Len() > 0 {
+				if err := p.Error(errs.Merge()); err != nil {
 					panic(err)
 				}
 			} else if err := p.Write("RET", []string{strconv.FormatFloat(amount, 'f', -1, 64)}); err != nil {

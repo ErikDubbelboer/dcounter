@@ -167,7 +167,7 @@ func init() {
 				}
 			}
 
-			inm := metrics.NewInmemSink(time.Second, time.Minute)
+			inm := metrics.NewInmemSink(time.Minute*10, time.Minute*20)
 			sig := metrics.DefaultInmemSignal(inm)
 			defer sig.Stop()
 			metrics.NewGlobal(metrics.DefaultConfig("dcounter"), inm)
