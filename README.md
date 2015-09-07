@@ -1,3 +1,6 @@
+
+### dcounter has been DEPRECATED in favor of https://github.com/ErikDubbelboer/discnt
+
 # dcounter
 
 [![Build Status](https://travis-ci.org/atomx/dcounter.svg?branch=master)](https://travis-ci.org/atomx/dcounter)
